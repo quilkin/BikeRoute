@@ -9,22 +9,55 @@
 
     function onDeviceReady() {
         // Handle the Cordova pause and resume events
-        document.addEventListener( 'pause', onPause.bind( this ), false );
-        document.addEventListener( 'resume', onResume.bind( this ), false );
+        //document.addEventListener( 'pause', onPause.bind( this ), false );
+        //document.addEventListener( 'resume', onResume.bind( this ), false );
         
-        // TODO: Cordova has been loaded. Perform any initialization that requires Cordova here.
-        var parentElement = document.getElementById('deviceready');
-        var listeningElement = parentElement.querySelector('.listening');
-        var receivedElement = parentElement.querySelector('.received');
-        listeningElement.setAttribute('style', 'display:none;');
-        receivedElement.setAttribute('style', 'display:block;');
+        //// TODO: Cordova has been loaded. Perform any initialization that requires Cordova here.
+        //configureBackgroundGeoLocation();
+        //myMap.watchPosition();
+        //TTS
+        //    .speak('hello, world!', function () {
+        //        alert('success');
+        //    }, function (reason) {
+        //        alert(reason);
+//});
+
     };
 
+    $(document).ready(function () {
+
+        // just testing server connections
+
+        //var loc = { latitude: 47.640068, longitude: -122.129858 };
+        //MapData.json('SaveLocation', "POST", loc, function () { }, true, null);
+        //MapData.json('GetLocations', "POST", null, function (locs) {
+        //    var locations = [];
+        //    $.each(locs, function (index, loc) {
+        //        if (loc.latitude > 0)
+        //            locations += loc;
+        //    })
+        //}, true, null);
+
+        //myMap.create();
+    });
+
     function onPause() {
-        // TODO: This application has been suspended. Save application state here.
+        ///**
+        //* Cordova foreground geolocation watch has no stop/start detection or scaled distance-filtering to conserve HTTP requests based upon speed.  
+        //* You can't leave Cordova's GeoLocation running in background or it'll kill your battery.  This is the purpose of BackgroundGeoLocation:  to intelligently 
+        //* determine start/stop of device.
+        //*/
+        //    console.log('- onPause');
+        //    myMap.stopPositionWatch();
     };
 
     function onResume() {
-        // TODO: This application has been reactivated. Restore application state here.
+        ///**
+        //* Once in foreground, re-engage foreground geolocation watch with standard Cordova GeoLocation api
+        //*/
+        //    console.log('- onResume');
+        //    myMap.watchPosition();
     };
+
+
 } )();
