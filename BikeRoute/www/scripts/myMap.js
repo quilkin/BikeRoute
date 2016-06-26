@@ -104,6 +104,8 @@ var myMap = (function ($) {
         messageBox,
         routeLine = null,
         distances = [],
+        ascents = [],
+        descents= [],
         routes = [],
         markers = [],
         legs = [],
@@ -119,10 +121,12 @@ var myMap = (function ($) {
         useRoads = 2,
         useHills = 2,
         maxGrad = 0,
-        totalAsc, totalDesc,
+       // totalAsc, totalDesc,
         totalDistance,
         nearest,nextNearest,
-        dialog,dialogContents;
+        dialog, dialogContents;
+
+    var tempData = [];
 
 
     var redIcon = new L.Icon({
@@ -303,7 +307,8 @@ var myMap = (function ($) {
         //});
 
         if (wayPoints.length === 1) {
-            totalAsc = 0, totalDesc = 0, totalDistance = 0;
+            //totalAsc = 0, totalDesc = 0, 
+            totalDistance = 0;
             marker = L.marker([centre.lat, centre.lng], { icon: greenIcon }).addTo(map);
             markers.push(marker);
             // this is first (starting) point. Need more points!
@@ -322,14 +327,27 @@ var myMap = (function ($) {
             alert("No waypoints to delete!")
             return;
         }
-        var marker = markers.pop();
-        map.removeLayer(marker);
+        map.removeLayer(markers.pop());
         distances.pop();
+        ascents.pop();
+        descents.pop();
         wayPoints.pop();
-        var route = routes.pop();
-        map.removeLayer(route);
-        createRoute();
-        //var distance = distances[distances.length -1];
+        map.removeLayer(routes.pop());
+        showStats();
+
+    }
+
+    function showStats() {
+        var leg, totalDist = 0, totalAsc = 0, totalDesc = 0;
+        for (leg = 0; leg < distances.length; leg++) {
+            totalDist += distances[leg];
+        }
+        for (leg = 0; leg < distances.length; leg++) {
+            totalAsc += ascents[leg];
+        } for (leg = 0; leg < distances.length; leg++) {
+            totalDesc += descents[leg];
+        }
+        map.messagebox.show('Dist: ' + totalDistance / 1000 + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc + 'm; Dist(2): ' + totalDist);
 
     }
     function openDialog() {
@@ -456,7 +474,7 @@ var myMap = (function ($) {
         followedPoints = [];
         nearestPoint = null;
         onTrack = false;
-        distances = [];
+        //distances = [];
         polyLineAll = '';
 
         // should only be one leg for each pair of waypoints?
@@ -481,7 +499,7 @@ var myMap = (function ($) {
             // now get coordinates of all points
             var pline = leg.shape;
             polyLineAll = polyLineAll + pline;
-            polyLineAll = pline;
+            //polyLineAll = pline;
             var locations = polyLineDecode(pline, 6);
 
             var colour = 'red';
@@ -508,16 +526,14 @@ var myMap = (function ($) {
         routePoints.push(lastPoint);
         routePoints.push(lastPoint);
 
-        //var totalDist = 0;
-        //for (var d = 0; d < distances.length; d++) {
-        //    totalDist += distances[d];
-        //}
+
 
         // get elevation data
         var data = {
             range: true,
             encoded_polyline: polyLineAll
         }
+        tempData.push(data);
         MapData.jsonMapzenElevation(data, function (response) {
             var elevs = response.range_height;
             var legAsc = 0;
@@ -553,9 +569,12 @@ var myMap = (function ($) {
                 
             }
             totalDistance = totalDistance + legDist;
-            totalAsc = totalAsc + legAsc;
-            totalDesc = totalDesc + legDesc;
-            map.messagebox.show('Dist: ' + totalDistance/1000 + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc + 'm; MaxGrad: ' + Math.floor(maxGrad*100));
+            //totalAsc = totalAsc + legAsc;
+            //totalDesc = totalDesc + legDesc;
+            ascents.push(legAsc);
+            descents.push(legDesc);
+            showStats();
+
 
         });
 
