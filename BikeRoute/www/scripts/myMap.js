@@ -14,7 +14,7 @@ var MapData = (function ($) {
 
     }
     function webRequestFailed(handle, status, error) {
-        alert("Web Error: " + error);
+        alert("Web Error: " + error.message);
 
     }
 
@@ -58,17 +58,22 @@ var MapData = (function ($) {
                 error: webRequestFailed
             });
     };
+    var tempData = '';
+    var tries= 0;
     MapData.jsonMapzenElevation = function (data, successfunc) {
         var dataJson = JSON.stringify(data);
         var url = 'https://elevation.mapzen.com/height?json=' + dataJson + '&api_key=elevation-fMwHH2H';
-
+        tempData = data;
          $.ajax({
             url: url,
             type: "GET",
             contentType: 'application/x-www-form-urlencoded',
             dataType: "json",
             success: successfunc,
-            error: webRequestFailed
+             error: webRequestFailed
+            //success: function() { tries=0;successfunc},
+             //error: function () { webRequestFailed(); MapData.jsonMapzenElevation(data, successfunc) }
+            //error: function () { if (++tries > 1) webRequestFailed; else MapData.jsonMapzenElevation(data, successfunc) }
         });
     };
 
@@ -100,7 +105,7 @@ var myMap = (function ($) {
         routeLine = null,
         distances = [],
         routes = [],
-        markers=[],
+        markers = [],
         legs = [],
         wayPoints = [],
         routePoints = [],
@@ -113,6 +118,9 @@ var myMap = (function ($) {
         bikeType,
         useRoads = 2,
         useHills = 2,
+        maxGrad = 0,
+        totalAsc, totalDesc,
+        totalDistance,
         nearest,nextNearest,
         dialog,dialogContents;
 
@@ -270,7 +278,7 @@ var myMap = (function ($) {
         L.easyButton('<span class="bigfont">&cross;</span>', deletePoint).addTo(map);
         L.easyButton('<span class="bigfont">&odot;</span>', openDialog).addTo(map);
         bikeType = "Hybrid";
-        map.messagebox.options.timeout = 5000;
+        map.messagebox.options.timeout = 10000;
         map.messagebox.setPosition('bottomleft');
         map.messagebox.show('');
 
@@ -295,6 +303,7 @@ var myMap = (function ($) {
         //});
 
         if (wayPoints.length === 1) {
+            totalAsc = 0, totalDesc = 0, totalDistance = 0;
             marker = L.marker([centre.lat, centre.lng], { icon: greenIcon }).addTo(map);
             markers.push(marker);
             // this is first (starting) point. Need more points!
@@ -317,7 +326,8 @@ var myMap = (function ($) {
         map.removeLayer(marker);
         distances.pop();
         wayPoints.pop();
-
+        var route = routes.pop();
+        map.removeLayer(route);
         createRoute();
         //var distance = distances[distances.length -1];
 
@@ -406,27 +416,27 @@ var myMap = (function ($) {
 
     function createRoute()
     {
-        while (routes.length > 0) {
-            var route = routes.pop();
-            map.removeLayer(route);
-        }
+        //while (routes.length > 0) {
+        //    var route = routes.pop();
+        //    map.removeLayer(route);
+        //}
         if (wayPoints.length < 2)
         {
-            //alert("No waypoints added!")
             return;
         }
-        //if (route != undefined)
-        //    map.removeLayer(route);
 
-        //var polyline = L.polyline(wayPoints, { color: 'red' }).addTo(map);
-        var p, points=[];
-        for (p = 0; p < wayPoints.length; p++) {
-            points.push({ lat: wayPoints[p].lat, lon: wayPoints[p].lng })
-        }
+        //var p, points=[];
+        //for (p = 0; p < wayPoints.length; p++) {
+        //    points.push({ lat: wayPoints[p].lat, lon: wayPoints[p].lng })
+        //}
+        var points = wayPoints.length;
+        var lastPoint = wayPoints[points - 1];
+        var lastButOne = wayPoints[points - 2];
+
         var data = {
-            //locations: [{ lat: wayPoints[0].lat, lon: wayPoints[0].lng }, { lat: wayPoints[1].lat, lon: wayPoints[1].lng }],
-            locations: points,
-            costing: "bicycle",
+            locations: [{ lat: lastButOne.lat, lon: lastButOne.lng }, { lat: lastPoint.lat, lon: lastPoint.lng }],
+            //locations: points,
+             costing: "bicycle",
             costing_options: {
                 bicycle: {
                     bicycle_type: bikeType,
@@ -449,6 +459,7 @@ var myMap = (function ($) {
         distances = [];
         polyLineAll = '';
 
+        // should only be one leg for each pair of waypoints?
         for (var i = 0; i < response.trip.legs.length; i++) {
             var leg = response.trip.legs[i];
             var legDist = 0;
@@ -470,18 +481,18 @@ var myMap = (function ($) {
             // now get coordinates of all points
             var pline = leg.shape;
             polyLineAll = polyLineAll + pline;
+            polyLineAll = pline;
             var locations = polyLineDecode(pline, 6);
 
             var colour = 'red';
-            //if (wayPoints.length > 2) colour = 'blue';
-            //if (wayPoints.length > 3) colour = 'green';
+
             var route = new L.Polyline(locations, {
                 color: colour,
                 opacity: 1,
                 weight: 2,
                 clickable: false
             }).addTo(map);
-            //var id = L.stamp(route);
+
             routes.push(route);
             distances.push(legDist);
             for (var loc = 0; loc < locations.length; loc++) {
@@ -497,11 +508,10 @@ var myMap = (function ($) {
         routePoints.push(lastPoint);
         routePoints.push(lastPoint);
 
-        var totalDist = 0;
-        for (var d = 0; d < distances.length; d++) {
-            totalDist += distances[d];
-        }
-        map.messagebox.show('Distance: ' + totalDist + ' km');
+        //var totalDist = 0;
+        //for (var d = 0; d < distances.length; d++) {
+        //    totalDist += distances[d];
+        //}
 
         // get elevation data
         var data = {
@@ -510,27 +520,43 @@ var myMap = (function ($) {
         }
         MapData.jsonMapzenElevation(data, function (response) {
             var elevs = response.range_height;
-            var totalElev = 0, lastElev = null, lastDist = 0;
-            var maxGrad = 0;
+            var legAsc = 0;
+            var legDesc = 0;
+            var legDist = 0;
+            var lastElev = null, lastDist = 0;
+            maxGrad = 0;
             for (var e=0; e<elevs.length; e++)
             {
                 var thisElev = elevs[e][1];
-                var totalDist = elevs[e][0];
-                if (lastElev != null)
-                {
-                    var deltaElev = (thisElev - lastElev);
-                    var thisDist = totalDist - lastDist;
-                    var grad = deltaElev / thisDist;
-                    if (grad > maxGrad) {
-                        maxGrad = grad;
-                    }
-                    totalElev += deltaElev;
+                var dist = elevs[e][0];
+                if (thisElev != null && dist<100000) {
+                    legDist = dist;
+                    if (lastElev != null) {
+                        var deltaElev = (thisElev - lastElev);
+                        var thisDist = legDist - lastDist;
+                        var grad = deltaElev / thisDist;
+                        if (grad > maxGrad) {
+                            maxGrad = grad;
+                        }
+                        if (deltaElev > 0)
+                            legAsc += deltaElev;
+                        else
+                            legDesc -= deltaElev;
 
+                    }
+                    lastElev = thisElev;
+                    lastDist = legDist;
                 }
-                lastElev = thisElev;
-                lastDist = totalDist;
+                else {
+                    var error = "!";
+                }
                 
             }
+            totalDistance = totalDistance + legDist;
+            totalAsc = totalAsc + legAsc;
+            totalDesc = totalDesc + legDesc;
+            map.messagebox.show('Dist: ' + totalDistance/1000 + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc + 'm; MaxGrad: ' + Math.floor(maxGrad*100));
+
         });
 
     }
