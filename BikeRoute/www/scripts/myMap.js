@@ -1,5 +1,4 @@
-﻿/// <reference path="~\openlayers\OpenLayers.js" />
-
+﻿/// <reference path="popups.js" />
 
 
 var MapData = (function ($) {
@@ -223,9 +222,9 @@ var myMap = (function ($) {
 
         addControlPlaceholders(map);
 
-        if (L.Browser.mobile == false) {
-            L.control.mousePosition().addTo(map);
-        }
+        //if (L.Browser.mobile == false) {
+        //    L.control.mousePosition().addTo(map);
+        //}
 
         // a cross-hair for choosing points
         iconCentre1 = L.control({ position: 'centerleft' });
@@ -251,8 +250,9 @@ var myMap = (function ($) {
 
         //L.easyButton('<span class="bigfont">&rarr;</span>', createRoute).addTo(map);
         L.easyButton('<span class="bigfont">&check;</span>', addPoint).addTo(map);
-        L.easyButton('<span class="bigfont">&cross;</span>', deletePoint).addTo(map);
+        L.easyButton('<span class="bigfont">&circlearrowleft;</span>', deletePoint).addTo(map);
         L.easyButton('<span class="bigfont">&odot;</span>', openDialog).addTo(map);
+        L.easyButton('<span class="bigfont">&cross;</span>', clearRoute).addTo(map);
         bikeType = "Hybrid";
         map.messagebox.options.timeout = 10000;
         map.messagebox.setPosition('bottomleft');
@@ -316,8 +316,29 @@ var myMap = (function ($) {
     function openDialog() {
         dialog.open();
     }
+
+    function clearRoute() {
+
+        if (confirm("Do you really want to clear your complete route?")) {
+            for (var r = 0; r < routes.length; r++) {
+                map.removeLayer(routes.pop());
+            }
+            for (var m = 0; m < markers.length; m++) {
+                map.removeLayer(markers.pop());
+            }
+            distances = [];
+            ascents = [];
+            descents = [];
+            wayPoints = [];
+        }
+        
+    }
     myMap.changeBike = function()
     {
+        if (wayPoints.length > 2)
+        {
+            alert("Cannot change bike after more than one waypoint set"); return;
+        }
         switch (bikeType) {
             case 'Hybrid': bikeType = 'Cross'; dialogContents = dialogContents.replace("Hybrid", "Cross"); break;
             case 'Cross': bikeType = 'Mountain'; dialogContents = dialogContents.replace("Cross", "Mountain"); break;
@@ -326,23 +347,29 @@ var myMap = (function ($) {
         }
         dialog.setContent(dialogContents);
         dialog.update();
-        if (wayPoints.length >= 2)
+        if (wayPoints.length === 2)
             createRoute();
     }
     myMap.changeMainRoads = function () {
+        if (wayPoints.length > 2) {
+            alert("Cannot change option after more than one waypoint set"); return;
+        }
         useRoads = (useRoads + 1) % 10;
         dialogContents = dialogContents.replace(/roads \(0-9\): [0-9]/, "roads (0-9): " + useRoads);
         dialog.setContent(dialogContents);
         dialog.update();
-        if (wayPoints.length >= 2)
+        if (wayPoints.length === 2)
             createRoute();
     }
     myMap.changeHills = function () {
+        if (wayPoints.length > 2) {
+            alert("Cannot change option after more than one waypoint set"); return;
+        }
         useHills = (useHills + 1) % 10;
         dialogContents = dialogContents.replace(/hills \(0-9\): [0-9]/, "hills (0-9): " + useHills);
         dialog.setContent(dialogContents);
         dialog.update();
-        if (wayPoints.length >= 2)
+        if (wayPoints.length === 2)
             createRoute();
     }
     // Code from Mapzen site
