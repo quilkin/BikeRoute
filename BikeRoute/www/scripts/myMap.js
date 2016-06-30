@@ -2,7 +2,6 @@
 
 
 
-
 var MapData = (function ($) {
     "use strict";
 
@@ -14,8 +13,7 @@ var MapData = (function ($) {
 
     }
     function webRequestFailed(handle, status, error) {
-        alert("Web Error: " + error.message);
-
+        alert("Web Error: " + error);
     }
 
     MapData.json = function (url, type, data, successfunc) {
@@ -44,37 +42,22 @@ var MapData = (function ($) {
         }
     };
 
-    MapData.jsonMapzen = function (data, successfunc) {
+    MapData.jsonMapzen = function (elev,data, successfunc) {
         var dataJson = JSON.stringify(data);
-        var url = 'https://valhalla.mapzen.com/route?json=' +  dataJson + '&api_key=valhalla-3F5smze' ;
-        
-        //var dataJson = "{\"locations\":[{\"lat\":42.358528,\"lon\":-83.271400},{\"lat\":42.996613,\"lon\":-78.749855}]}"
+        var url;
+        if (elev)
+            url = 'https://elevation.mapzen.com/height?&api_key=elevation-fMwHH2H';
+        else
+            url = 'https://valhalla.mapzen.com/route?&api_key=valhalla-3F5smze';
             $.ajax({
                 url: url,
-                type: "GET",
-                contentType: 'application/x-www-form-urlencoded',
+                type: "POST",
+                data: dataJson,
+                contentType: "application/json; charset=utf-8",
                 dataType: "json",
                 success: successfunc,
                 error: webRequestFailed
             });
-    };
-    var tempData = '';
-    var tries= 0;
-    MapData.jsonMapzenElevation = function (data, successfunc) {
-        var dataJson = JSON.stringify(data);
-        var url = 'https://elevation.mapzen.com/height?json=' + dataJson + '&api_key=elevation-fMwHH2H';
-        tempData = data;
-         $.ajax({
-            url: url,
-            type: "GET",
-            contentType: 'application/x-www-form-urlencoded',
-            dataType: "json",
-            success: successfunc,
-             error: webRequestFailed
-            //success: function() { tries=0;successfunc},
-             //error: function () { webRequestFailed(); MapData.jsonMapzenElevation(data, successfunc) }
-            //error: function () { if (++tries > 1) webRequestFailed; else MapData.jsonMapzenElevation(data, successfunc) }
-        });
     };
 
     return MapData;
@@ -118,11 +101,9 @@ var myMap = (function ($) {
         onTrack = false,
         lastLine1, lastLine2, lastDem,
         bikeType,
-        useRoads = 2,
-        useHills = 2,
+        useRoads = 5,
+        useHills = 5,
         maxGrad = 0,
-       // totalAsc, totalDesc,
-        totalDistance,
         nearest,nextNearest,
         dialog, dialogContents;
 
@@ -184,15 +165,6 @@ var myMap = (function ($) {
         createCorner('center', 'right');
 
     }
-    //map = L.map('map');
-    //map.locate({ setView: true, maxZoom: 16 });
-    //L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
-    //    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
-    //    maxZoom: 18
-    //}).addTo(map);
-
-
-
 
     // get the list of points to map
     MapData.json('GetLocations', "POST", null, function (locs) {
@@ -285,18 +257,12 @@ var myMap = (function ($) {
         map.messagebox.options.timeout = 10000;
         map.messagebox.setPosition('bottomleft');
         map.messagebox.show('');
-
-
     }
-
-
 
     function addPoint() {
 
         var centre = map.getCenter();
         wayPoints.push(L.latLng(centre.lat, centre.lng));
-        //if (route == undefined) {
-        //if (routes.length == 0)
         var marker = L.marker([centre.lat, centre.lng]).addTo(map);
         //responsiveVoice.speak("Added a point");
 
@@ -307,8 +273,6 @@ var myMap = (function ($) {
         //});
 
         if (wayPoints.length === 1) {
-            //totalAsc = 0, totalDesc = 0, 
-            totalDistance = 0;
             marker = L.marker([centre.lat, centre.lng], { icon: greenIcon }).addTo(map);
             markers.push(marker);
             // this is first (starting) point. Need more points!
@@ -318,8 +282,6 @@ var myMap = (function ($) {
         
         markers.push(marker);
         createRoute();
-        //var distance = distances[distances.length - 1];
-        //map.messagebox.show('Distance: ' + distance + ' km');
     }
     function deletePoint()
     {
@@ -342,12 +304,13 @@ var myMap = (function ($) {
         for (leg = 0; leg < distances.length; leg++) {
             totalDist += distances[leg];
         }
-        for (leg = 0; leg < distances.length; leg++) {
+        for (leg = 0; leg < ascents.length; leg++) {
             totalAsc += ascents[leg];
-        } for (leg = 0; leg < distances.length; leg++) {
+        } for (leg = 0; leg < descents.length; leg++) {
             totalDesc += descents[leg];
         }
-        map.messagebox.show('Dist: ' + totalDistance / 1000 + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc + 'm; Dist(2): ' + totalDist);
+        totalDist = (Math.round(totalDist * 10) / 10);
+        map.messagebox.show('Dist: ' + totalDist + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc );
 
     }
     function openDialog() {
@@ -434,19 +397,10 @@ var myMap = (function ($) {
 
     function createRoute()
     {
-        //while (routes.length > 0) {
-        //    var route = routes.pop();
-        //    map.removeLayer(route);
-        //}
         if (wayPoints.length < 2)
         {
             return;
         }
-
-        //var p, points=[];
-        //for (p = 0; p < wayPoints.length; p++) {
-        //    points.push({ lat: wayPoints[p].lat, lon: wayPoints[p].lng })
-        //}
         var points = wayPoints.length;
         var lastPoint = wayPoints[points - 1];
         var lastButOne = wayPoints[points - 2];
@@ -463,18 +417,15 @@ var myMap = (function ($) {
                 }
             }
         }
-        MapData.jsonMapzen(data,getRoute);
-       
+        MapData.jsonMapzen(false,data,getRoute);
     }
 
     function getRoute(response) {
-
-        
+       
         routePoints = [];
         followedPoints = [];
         nearestPoint = null;
         onTrack = false;
-        //distances = [];
         polyLineAll = '';
 
         // should only be one leg for each pair of waypoints?
@@ -526,59 +477,53 @@ var myMap = (function ($) {
         routePoints.push(lastPoint);
         routePoints.push(lastPoint);
 
-
-
         // get elevation data
         var data = {
             range: true,
             encoded_polyline: polyLineAll
         }
         tempData.push(data);
-        MapData.jsonMapzenElevation(data, function (response) {
-            var elevs = response.range_height;
-            var legAsc = 0;
-            var legDesc = 0;
-            var legDist = 0;
-            var lastElev = null, lastDist = 0;
-            maxGrad = 0;
-            for (var e=0; e<elevs.length; e++)
-            {
-                var thisElev = elevs[e][1];
-                var dist = elevs[e][0];
-                if (thisElev != null && dist<100000) {
-                    legDist = dist;
-                    if (lastElev != null) {
-                        var deltaElev = (thisElev - lastElev);
-                        var thisDist = legDist - lastDist;
-                        var grad = deltaElev / thisDist;
-                        if (grad > maxGrad) {
-                            maxGrad = grad;
-                        }
-                        if (deltaElev > 0)
-                            legAsc += deltaElev;
-                        else
-                            legDesc -= deltaElev;
-
-                    }
-                    lastElev = thisElev;
-                    lastDist = legDist;
-                }
-                else {
-                    var error = "!";
-                }
-                
-            }
-            totalDistance = totalDistance + legDist;
-            //totalAsc = totalAsc + legAsc;
-            //totalDesc = totalDesc + legDesc;
-            ascents.push(legAsc);
-            descents.push(legDesc);
-            showStats();
-
-
-        });
+        MapData.jsonMapzen(true,data, getElevations);
 
     }
+
+    function getElevations(response) {
+        var elevs = response.range_height;
+        var legAsc = 0;
+        var legDesc = 0;
+        var legDist = 0;
+        var lastElev = null, lastDist = 0;
+        maxGrad = 0;
+        for (var e = 0; e < elevs.length; e++) {
+            var thisElev = elevs[e][1];
+            var dist = elevs[e][0];
+            if (thisElev != null && dist < 100000) {
+                legDist = dist;
+                if (lastElev != null) {
+                    var deltaElev = (thisElev - lastElev);
+                    var thisDist = legDist - lastDist;
+                    var grad = deltaElev / thisDist;
+                    if (grad > maxGrad) {
+                        maxGrad = grad;
+                    }
+                    if (deltaElev > 0)
+                        legAsc += deltaElev;
+                    else
+                        legDesc -= deltaElev;
+                }
+                lastElev = thisElev;
+                lastDist = legDist;
+            }
+            else {
+                var error = "!";
+            }
+
+        }
+        ascents.push(legAsc);
+        descents.push(legDesc);
+        showStats();
+    }
+
     function pointToLine(point0,line1,line2) {
         // find min distance from point0 to line defined by points line1 and line2
         // equation from Wikipedia
