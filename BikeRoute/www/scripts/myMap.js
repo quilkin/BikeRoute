@@ -1,4 +1,6 @@
 ﻿/// <reference path="popups.js" />
+/// <reference path="bootbox.min.js" />
+/// <reference path="dialog.js" />
 
 
 var MapData = (function ($) {
@@ -78,7 +80,7 @@ var myMap = (function ($) {
 
     var myMap = {},
         map,
-        location,
+        location=null,
         path,
         aggressiveEnabled,
         locations = [],
@@ -91,7 +93,7 @@ var myMap = (function ($) {
         routes = [],
         markers = [],
         legs = [],
-        wayPoints = [],
+        
         routePoints = [],
         followedPoints = [],
         polyLineAll = '',
@@ -99,12 +101,15 @@ var myMap = (function ($) {
         lastNearestPoint = null,
         onTrack = false,
         lastLine1, lastLine2, lastDem,
-        bikeType,
-        useRoads = 5,
-        useHills = 5,
+
         maxGrad = 0,
         nearest,nextNearest,
         dialog, dialogContents;
+
+    var wayPoints = [];
+    var bikeType = 'Hybrid';
+    var useRoads = 5;
+    var useHills = 5;
 
     var tempData = [];
 
@@ -165,58 +170,69 @@ var myMap = (function ($) {
 
     }
 
-    // get the list of points to map
-    MapData.json('GetLocations', "POST", null, function (locs) {
-
-        // first point will be the latest one recorded, use this to centre the map
-        location = locs[0];
+    navigator.geolocation.getCurrentPosition(function (position) {
+        var latitude = position.coords.latitude;
+        var longitude = position.coords.longitude;
         var options = { timeout: 5000, position: 'bottomleft' }
-        map = L.map('map', { messagebox: true }).setView([location.latitude, location.longitude], 14);
+        map = L.map('map', { messagebox: true }).setView([latitude, longitude], 14);
 
         L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 18
-            
+
         }).addTo(map);
-
-
-        var index, count = locs.length;
-        var now = new Date();
-        var reggie = /(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})/;
-        var dateArray, dateObj;
-        for (index = count - 1; index >= 0; index--)
-        {
-            
-            var loc = locs[index];
-            if (loc.latitude != 0) {
-                var dt = now;
-                // convert SQL date string to EU format
-                dateArray = reggie.exec(loc.recorded_at);
-                    dt   = new Date(
-                    (+dateArray[3]),
-                    (+dateArray[2]) - 1, // Careful, month starts at 0!
-                    (+dateArray[1]),
-                    (+dateArray[4]),
-                    (+dateArray[5]),
-                    (+dateArray[6])
-                );
-
-                var colour = (index === 0) ? 'red' : 'blue';
-                if (now.getDate() != dt.getDate())
-                    colour = 'gray';
-
-                var circle = L.circle([loc.latitude, loc.longitude], (index === 0) ? 60 : 15, {
-                    color: colour,
-                    fillColor: colour,
-                    fillOpacity: 0.5
-                }).addTo(map);
-                circle.bindPopup(loc.recorded_at);
-            }
-        }
         AddControls();
+    });
+    // get the list of points to map
+    //MapData.json('GetLocations', "POST", null, function (locs) {
+
+    //    // first point will be the latest one recorded, use this to centre the map
+    //    location = locs[0];
+    //    var options = { timeout: 5000, position: 'bottomleft' }
+    //    map = L.map('map', { messagebox: true }).setView([location.latitude, location.longitude], 14);
+
+    //    L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+    //        attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
+    //        maxZoom: 18
+    //    }).addTo(map);
 
 
-    }, true, null);
+    //    var index, count = locs.length;
+    //    var now = new Date();
+    //    var reggie = /(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})/;
+    //    var dateArray, dateObj;
+    //    for (index = count - 1; index >= 0; index--)
+    //    {
+    //        var loc = locs[index];
+    //        if (loc.latitude != 0) {
+    //            var dt = now;
+    //            // convert SQL date string to EU format
+    //            dateArray = reggie.exec(loc.recorded_at);
+    //                dt   = new Date(
+    //                (+dateArray[3]),
+    //                (+dateArray[2]) - 1, // Careful, month starts at 0!
+    //                (+dateArray[1]),
+    //                (+dateArray[4]),
+    //                (+dateArray[5]),
+    //                (+dateArray[6])
+    //            );
+
+    //            var colour = (index === 0) ? 'red' : 'blue';
+    //            if (now.getDate() != dt.getDate())
+    //                colour = 'gray';
+
+    //            var circle = L.circle([loc.latitude, loc.longitude], (index === 0) ? 60 : 15, {
+    //                color: colour,
+    //                fillColor: colour,
+    //                fillOpacity: 0.5
+    //            }).addTo(map);
+    //            circle.bindPopup(loc.recorded_at);
+    //        }
+    //    }
+    //    AddControls();
+
+
+    //}, true, null);
 
     function AddControls() {
 
@@ -237,27 +253,79 @@ var myMap = (function ($) {
         }
         iconCentre1.addTo(map);
 
-        dialogContents = [
-         "<p><b>Options</b></p>",
-         "<button class='btn btn-primary' onclick='myMap.changeBike()'>Bike Type: Hybrid</button><br/><br/>",
-          "<button class='btn btn-primary' onclick='myMap.changeHills()'>Use of hills (0-9): 2</button><br/><br/>",
-          "<button class='btn btn-primary' onclick='myMap.changeMainRoads()'>Main roads (0-9): 2</button><br/><br/>",
-        ].join('');
-
-        dialog = L.control.dialog()
-                  .setContent(dialogContents)
-                  .addTo(map);
 
         //L.easyButton('<span class="bigfont">&rarr;</span>', createRoute).addTo(map);
         L.easyButton('<span class="bigfont">&check;</span>', addPoint).addTo(map);
         L.easyButton('<span class="bigfont">&circlearrowleft;</span>', deletePoint).addTo(map);
-        L.easyButton('<span class="bigfont">&odot;</span>', openDialog).addTo(map);
+        L.easyButton('<span class="bigfont">&odot;</span>', options).addTo(map);
         L.easyButton('<span class="bigfont">&cross;</span>', clearRoute).addTo(map);
-        bikeType = "Hybrid";
+        myMap.bikeType = "Hybrid";
         map.messagebox.options.timeout = 10000;
         map.messagebox.setPosition('bottomleft');
         map.messagebox.show('');
     }
+    function options() {
+        if (wayPoints.length > 2) {
+            alert("Cannot options after more than one waypoint set"); return;
+        }
+        var contents =
+                '<div class="row">  ' +
+                '<div class="col-md-12"> ' +
+                '<form class="form-horizontal"> ' +
+                '<div class="form-group"> ' +
+                '<label class="col-xs-6 col-md-4 control-label" for="bike">Bike Type?</label> ' +
+                '<div class="col-xs-6 col-md-4">' +
+                '<div class="radio"> <label for="bike-0"> ' +
+                '<input type="radio" name="bike" id="bike-0" value="Mountain"' + ((bikeType === 'Mountain') ? 'checked="checked"' : '') + '"> Mountain </label> ' +
+                '</div><div class="radio"> <label for="bike-1"> ' +
+                '<input type="radio" name="bike" id="bike-1" value="Cross" ' + ((bikeType === 'Cross') ? 'checked="checked"' : '') + '"> Cross </label> ' +
+                '</div><div class="radio"> <label for="bike-2"> ' +
+                '<input type="radio" name="bike" id="bike-2" value="Hybrid"' + ((bikeType === 'Hybrid') ? 'checked="checked"' : '') + '"> Hybrid/Town </label> ' +
+                '</div><div class="radio"> <label for="bike-3"> ' +
+                '<input type="radio" name="bike" id="bike-3" value="Road" ' + ((bikeType === 'Road') ? 'checked="checked"' : '') + '"> Road </label> ' +
+                '</div> ' +
+                '</div> </div>' +
+                '<div class="form-group"> ' +
+                '<label class="col-xs-6 col-md-4 control-label" for="hills">Use of hills</label> ' +
+                '<div class="col-xs-6 col-md-4">' +
+                '<div class="radio"> <label for="hills-0"> ' +
+                '<input type="radio" name="hills" id="hills-0" value="0"' + ((useHills < 3) ? 'checked="checked"' : '') + '"> Little as possible </label> ' +
+                '</div><div class="radio"> <label for="hills-1"> ' +
+                '<input type="radio" name="hills" id="hills-1" value="5" ' + ((useHills >= 3 && useHills <= 7) ? 'checked="checked"' : '') + '"> A few </label> ' +
+                '</div><div class="radio"> <label for="hills-2"> ' +
+                '<input type="radio" name="hills" id="hills-2" value="9"' + ((useHills > 7) ? 'checked="checked"' : '') + '"> Lots </label> ' +
+                '</div> ' +
+                '</div> </div>' +
+                '<div class="form-group"> ' +
+                '<label class="col-xs-6 col-md-4 control-label" for="roads">Use of main roads</label> ' +
+                '<div class="col-xs-6 col-md-4">' +
+                '<div class="radio"> <label for="roads-0"> ' +
+                '<input type="radio" name="roads" id="roads-0" value="0"' + ((useRoads < 3) ? 'checked="checked"' : '') + '"> Little as possible </label> ' +
+                '</div><div class="radio"> <label for="roads-1"> ' +
+                '<input type="radio" name="roads" id="roads-1" value="5" ' + ((useRoads >= 3 && useRoads <= 7) ? 'checked="checked"' : '') + '"> A few </label> ' +
+                '</div><div class="radio"> <label for="roads-2"> ' +
+                '<input type="radio" name="roads" id="roads-2" value="9"' + ((useRoads > 7) ? 'checked="checked"' : '') + '"> More </label> ' +
+                '</div> ' +
+                '</div> </div>' +
+                '</form> </div>  </div>';
+        bootbox.dialog({
+            title: "Options",
+            message: contents,
+            buttons: {
+                success: {
+                    label: "Save",
+                    className: "btn-success",
+                    callback: function () {
+                        bikeType = $("input[name='bike']:checked").val();
+                        useHills = $("input[name='hills']:checked").val();
+                        useRoads = $("input[name='roads']:checked").val();
+                        if (wayPoints.length === 2)
+                            createRoute();
+                    }
+                }
+            }
+        });
+     }
 
     function addPoint() {
 
@@ -266,11 +334,13 @@ var myMap = (function ($) {
         var marker = L.marker([centre.lat, centre.lng]).addTo(map);
         //responsiveVoice.speak("Added a point");
 
-        //window.TTS.speak("Added a point", function () {
-        //    alert('success');
-        //}, function (reason) {
-        //    alert(reason);
-        //});
+        if (typeof TTS != 'undefined') {
+            TTS.speak("Added a waypoint", function () {
+                null;
+            }, function (reason) {
+                alert(reason);
+            });
+        }
 
         if (wayPoints.length === 1) {
             marker = L.marker([centre.lat, centre.lng], { icon: greenIcon }).addTo(map);
@@ -279,7 +349,6 @@ var myMap = (function ($) {
             distances = [];
             return;
         }
-        
         markers.push(marker);
         createRoute();
     }
@@ -313,65 +382,25 @@ var myMap = (function ($) {
         map.messagebox.show('Dist: ' + totalDist + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc );
 
     }
-    function openDialog() {
-        dialog.open();
-    }
-
+   
     function clearRoute() {
-
-        if (confirm("Do you really want to clear your complete route?")) {
-            for (var r = 0; r < routes.length; r++) {
-                map.removeLayer(routes.pop());
+        bootbox.confirm("Do you really want to clear your complete route?", function (result) {
+            if (result===true)
+            {
+                for (var r = 0; r < routes.length; r++) {
+                    map.removeLayer(routes.pop());
+                }
+                for (var m = 0; m < markers.length; m++) {
+                    map.removeLayer(markers.pop());
+                }
+                distances = [];
+                ascents = [];
+                descents = [];
+                wayPoints = [];
             }
-            for (var m = 0; m < markers.length; m++) {
-                map.removeLayer(markers.pop());
-            }
-            distances = [];
-            ascents = [];
-            descents = [];
-            wayPoints = [];
-        }
-        
+        })
     }
-    myMap.changeBike = function()
-    {
-        if (wayPoints.length > 2)
-        {
-            alert("Cannot change bike after more than one waypoint set"); return;
-        }
-        switch (bikeType) {
-            case 'Hybrid': bikeType = 'Cross'; dialogContents = dialogContents.replace("Hybrid", "Cross"); break;
-            case 'Cross': bikeType = 'Mountain'; dialogContents = dialogContents.replace("Cross", "Mountain"); break;
-            case 'Mountain': bikeType = 'Road'; dialogContents = dialogContents.replace("Mountain", "Road"); break;
-            case "Road": bikeType = 'Hybrid'; dialogContents = dialogContents.replace("Road", "Hybrid"); break;
-        }
-        dialog.setContent(dialogContents);
-        dialog.update();
-        if (wayPoints.length === 2)
-            createRoute();
-    }
-    myMap.changeMainRoads = function () {
-        if (wayPoints.length > 2) {
-            alert("Cannot change option after more than one waypoint set"); return;
-        }
-        useRoads = (useRoads + 1) % 10;
-        dialogContents = dialogContents.replace(/roads \(0-9\): [0-9]/, "roads (0-9): " + useRoads);
-        dialog.setContent(dialogContents);
-        dialog.update();
-        if (wayPoints.length === 2)
-            createRoute();
-    }
-    myMap.changeHills = function () {
-        if (wayPoints.length > 2) {
-            alert("Cannot change option after more than one waypoint set"); return;
-        }
-        useHills = (useHills + 1) % 10;
-        dialogContents = dialogContents.replace(/hills \(0-9\): [0-9]/, "hills (0-9): " + useHills);
-        dialog.setContent(dialogContents);
-        dialog.update();
-        if (wayPoints.length === 2)
-            createRoute();
-    }
+    
     // Code from Mapzen site
     function polyLineDecode(str, precision) {
         var index = 0,
@@ -438,9 +467,9 @@ var myMap = (function ($) {
              costing: "bicycle",
             costing_options: {
                 bicycle: {
-                    bicycle_type: bikeType,
-                    use_roads: useRoads / 10,
-                    use_hills: useHills / 10
+                    bicycle_type: myMap.bikeType,
+                    use_roads: myMap.useRoads / 10,
+                    use_hills: myMap.useHills / 10
                 }
             }
         }
@@ -687,4 +716,4 @@ var myMap = (function ($) {
         return (onTrack);
     }
     return myMap
-})(jQuery)
+})(jQuery )

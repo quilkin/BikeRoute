@@ -5,24 +5,22 @@
 (function () {
     "use strict";
 
-    document.addEventListener( 'deviceready', onDeviceReady.bind( this ), false );
+    document.addEventListener('deviceready', function () {
 
-    function onDeviceReady() {
         // Handle the Cordova pause and resume events
         //document.addEventListener( 'pause', onPause.bind( this ), false );
         //document.addEventListener( 'resume', onResume.bind( this ), false );
-        
+
         //// TODO: Cordova has been loaded. Perform any initialization that requires Cordova here.
         //configureBackgroundGeoLocation();
         //myMap.watchPosition();
-        //TTS
-        //    .speak('hello, world!', function () {
-        //        alert('success');
-        //    }, function (reason) {
-        //        alert(reason);
-//});
+        //TTS.speak('hello, world!', function () {
+        //    alert('success');
+        //}, function (reason) {
+        //    alert(reason);
+        //});
 
-    };
+    });
 
     $(document).ready(function () {
 

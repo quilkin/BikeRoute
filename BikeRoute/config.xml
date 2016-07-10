@@ -106,7 +106,7 @@
     <splash src="res/screens/wp8/SplashScreenImage.png" width="768" height="1280" />
   </platform>
   <plugin name="cordova-plugin-geolocation" version="2.2.0" />
-  <plugin name="cordova-plugin-tts" version="0.2.3" />
   <plugin name="cordova-plugin-compat" version="1.0.0" />
   <plugin name="cordova-plugin-whitelist" version="1.2.2" />
+  <plugin name="cordova-plugin-tts" version="0.2.3" src="https://github.com/vilic/cordova-plugin-tts" />
 </widget>

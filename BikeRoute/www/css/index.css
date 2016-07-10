@@ -22,7 +22,7 @@ html, body, #map {
     /* allow for size of icon */
     /*padding-top: -15px; 
     padding-left: -15px;*/
-    margin-left: -20px;
+    margin-left: 5px;
     margin-top: -15px;
 }
 .leaflet-verticalcenter .leaflet-control {
