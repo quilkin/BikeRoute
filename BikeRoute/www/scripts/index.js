@@ -2,28 +2,12 @@
 // http://go.microsoft.com/fwlink/?LinkID=397704
 // To debug code on page load in Ripple or on Android devices/emulators: launch your app, set breakpoints, 
 // and then run "window.location.reload()" in the JavaScript Console.
+
+var thisIsDevice = false;
 (function () {
     "use strict";
-
-    document.addEventListener('deviceready', function () {
-
-        // Handle the Cordova pause and resume events
-        //document.addEventListener( 'pause', onPause.bind( this ), false );
-        //document.addEventListener( 'resume', onResume.bind( this ), false );
-
-        //// TODO: Cordova has been loaded. Perform any initialization that requires Cordova here.
-        //configureBackgroundGeoLocation();
-        //myMap.watchPosition();
-        //TTS.speak('hello, world!', function () {
-        //    alert('success');
-        //}, function (reason) {
-        //    alert(reason);
-        //});
-
-    });
-
     $(document).ready(function () {
-
+        document.addEventListener('deviceready', onDeviceReady, false);
         // just testing server connections
 
         //var loc = { latitude: 47.640068, longitude: -122.129858 };
@@ -38,6 +22,28 @@
 
         //myMap.create();
     });
+
+    function onDeviceReady() {
+        thisIsDevice = true;
+        // Handle the Cordova pause and resume events
+        //document.addEventListener( 'pause', onPause.bind( this ), false );
+        //document.addEventListener( 'resume', onResume.bind( this ), false );
+
+        //// TODO: Cordova has been loaded. Perform any initialization that requires Cordova here.
+        //configureBackgroundGeoLocation();
+        //myMap.watchPosition();
+        //TTS.speak('hello, world!', function () {
+        //    alert('success');
+        //}, function (reason) {
+        //    alert(reason);
+        //});
+
+    }
+    //jQuery(function ($) {
+    //    document.addEventListener('deviceready', onDeviceReady.bind(this), false);
+    //})(jQuery);
+
+
 
     function onPause() {
         ///**

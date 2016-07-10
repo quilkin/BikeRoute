@@ -1,70 +1,7 @@
-﻿/// <reference path="popups.js" />
-/// <reference path="bootbox.min.js" />
-/// <reference path="dialog.js" />
+﻿/// <reference path="bootbox.min.js" />
+/// <reference path="mapData.js" />
+/// <reference path="index.js" />
 
-
-var MapData = (function ($) {
-    "use strict";
-
-    var MapData = {};
-
-    function urlBase() {
-       //return "http://localhost:60080/Service1.svc/";
-       return "http://www.quilkin.co.uk/Service1.svc/";
-
-    }
-    function webRequestFailed(handle, status, error) {
-        alert("Web Error: " + error);
-    }
-
-    MapData.json = function (url, type, data, successfunc) {
-        var thisurl = urlBase() + url;
-        if (data === null) {
-            $.ajax({
-                type: type,
-                url: thisurl,
-                contentType: 'application/x-www-form-urlencoded',
-                success: successfunc,
-                error: webRequestFailed
-            });
-        }
-        else {
-            var dataJson = JSON.stringify(data);
-
-            $.ajax({
-                type: type,
-                data: dataJson,
-                url: thisurl,
-                contentType: "application/json; charset=utf-8",
-                dataType: "json",
-                success: successfunc,
-                error: webRequestFailed
-            });
-        }
-    };
-
-    MapData.jsonMapzen = function (elev,data, successfunc) {
-        var dataJson = JSON.stringify(data);
-        var url;
-        if (elev)
-            url = 'https://elevation.mapzen.com/height?&api_key=elevation-fMwHH2H';
-        else
-            url = 'https://valhalla.mapzen.com/route?&api_key=valhalla-3F5smze';
-            $.ajax({
-                url: url,
-                type: "POST",
-                data: dataJson,
-                contentType: "application/json; charset=utf-8",
-                dataType: "json",
-                success: successfunc,
-                error: webRequestFailed
-            });
-    };
-
-    return MapData;
-
-
-}(jQuery));
 
 var myMap = (function ($) {
     "use strict";
@@ -80,7 +17,7 @@ var myMap = (function ($) {
 
     var myMap = {},
         map,
-        location=null,
+        location = null,
         path,
         aggressiveEnabled,
         locations = [],
@@ -89,10 +26,11 @@ var myMap = (function ($) {
         routeLine = null,
         distances = [],
         ascents = [],
-        descents= [],
+        descents = [],
         routes = [],
         markers = [],
         legs = [],
+        lastMarker = null,
         
         routePoints = [],
         followedPoints = [],
@@ -169,71 +107,80 @@ var myMap = (function ($) {
         createCorner('center', 'right');
 
     }
-
-    navigator.geolocation.getCurrentPosition(function (position) {
-        var latitude = position.coords.latitude;
-        var longitude = position.coords.longitude;
-        var options = { timeout: 5000, position: 'bottomleft' }
-        map = L.map('map', { messagebox: true }).setView([latitude, longitude], 14);
-
-        L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
-            maxZoom: 18
-
-        }).addTo(map);
-        AddControls();
-    });
-    // get the list of points to map
-    //MapData.json('GetLocations', "POST", null, function (locs) {
-
-    //    // first point will be the latest one recorded, use this to centre the map
-    //    location = locs[0];
-    //    var options = { timeout: 5000, position: 'bottomleft' }
-    //    map = L.map('map', { messagebox: true }).setView([location.latitude, location.longitude], 14);
-
-    //    L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
-    //        attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
-    //        maxZoom: 18
-    //    }).addTo(map);
+    //var bootstrap_alert = function () { }
+    //bootstrap_alert.warning = function (message) {
+    //    $('#alert_placeholder').html('<div class="alert"><a class="close" data-dismiss="alert">×</a><span>' + message + '</span></div>')
+    //}
 
 
-    //    var index, count = locs.length;
-    //    var now = new Date();
-    //    var reggie = /(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})/;
-    //    var dateArray, dateObj;
-    //    for (index = count - 1; index >= 0; index--)
-    //    {
-    //        var loc = locs[index];
-    //        if (loc.latitude != 0) {
-    //            var dt = now;
-    //            // convert SQL date string to EU format
-    //            dateArray = reggie.exec(loc.recorded_at);
-    //                dt   = new Date(
-    //                (+dateArray[3]),
-    //                (+dateArray[2]) - 1, // Careful, month starts at 0!
-    //                (+dateArray[1]),
-    //                (+dateArray[4]),
-    //                (+dateArray[5]),
-    //                (+dateArray[6])
-    //            );
+    if (thisIsDevice) {
+        // get the actual location
+        navigator.geolocation.getCurrentPosition(function (position) {
+            var latitude = position.coords.latitude;
+            var longitude = position.coords.longitude;
+            var options = { timeout: 5000, position: 'bottomleft' }
+            map = L.map('map', { messagebox: true }).setView([latitude, longitude], 14);
 
-    //            var colour = (index === 0) ? 'red' : 'blue';
-    //            if (now.getDate() != dt.getDate())
-    //                colour = 'gray';
+            L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 18
 
-    //            var circle = L.circle([loc.latitude, loc.longitude], (index === 0) ? 60 : 15, {
-    //                color: colour,
-    //                fillColor: colour,
-    //                fillOpacity: 0.5
-    //            }).addTo(map);
-    //            circle.bindPopup(loc.recorded_at);
-    //        }
-    //    }
-    //    AddControls();
+            }).addTo(map);
+            AddControls();
+        });
+    }
+    else {
+         //get the list of points to map
+        MapData.json('GetLocations', "POST", null, function (locs) {
+
+            // first point will be the latest one recorded, use this to centre the map
+            location = locs[0];
+            var options = { timeout: 5000, position: 'bottomleft' }
+            map = L.map('map', { messagebox: true }).setView([location.latitude, location.longitude], 14);
+
+            L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 18
+            }).addTo(map);
 
 
-    //}, true, null);
+            var index, count = locs.length;
+            var now = new Date();
+            var reggie = /(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})/;
+            var dateArray, dateObj;
+            for (index = count - 1; index >= 0; index--)
+            {
+                var loc = locs[index];
+                if (loc.latitude != 0) {
+                    var dt = now;
+                    // convert SQL date string to EU format
+                    dateArray = reggie.exec(loc.recorded_at);
+                        dt   = new Date(
+                        (+dateArray[3]),
+                        (+dateArray[2]) - 1, // Careful, month starts at 0!
+                        (+dateArray[1]),
+                        (+dateArray[4]),
+                        (+dateArray[5]),
+                        (+dateArray[6])
+                    );
 
+                    var colour = (index === 0) ? 'red' : 'blue';
+                    if (now.getDate() != dt.getDate())
+                        colour = 'gray';
+
+                    var circle = L.circle([loc.latitude, loc.longitude], (index === 0) ? 60 : 15, {
+                        color: colour,
+                        fillColor: colour,
+                        fillOpacity: 0.5
+                    }).addTo(map);
+                    circle.bindPopup(loc.recorded_at);
+                }
+            }
+            AddControls();
+
+
+        }, true, null);
+    }
     function AddControls() {
 
         addControlPlaceholders(map);
@@ -266,7 +213,7 @@ var myMap = (function ($) {
     }
     function options() {
         if (wayPoints.length > 2) {
-            alert("Cannot options after more than one waypoint set"); return;
+            bootbox.alert("Cannot change options after more than one waypoint set"); return;
         }
         var contents =
                 '<div class="row">  ' +
@@ -331,31 +278,34 @@ var myMap = (function ($) {
 
         var centre = map.getCenter();
         wayPoints.push(L.latLng(centre.lat, centre.lng));
-        var marker = L.marker([centre.lat, centre.lng]).addTo(map);
-        //responsiveVoice.speak("Added a point");
 
-        if (typeof TTS != 'undefined') {
-            TTS.speak("Added a waypoint", function () {
-                null;
-            }, function (reason) {
-                alert(reason);
-            });
-        }
+ 
+        //if (typeof TTS != 'undefined') {
+        //    TTS.speak("Added a waypoint", function () {
+        //        null;
+        //    }, function (reason) {
+        //        bootbox.alert(reason);
+        //    });
+        //}
 
         if (wayPoints.length === 1) {
-            marker = L.marker([centre.lat, centre.lng], { icon: greenIcon }).addTo(map);
+            var marker = L.marker([centre.lat, centre.lng], { icon: greenIcon }).addTo(map);
             markers.push(marker);
             // this is first (starting) point. Need more points!
             distances = [];
             return;
         }
-        markers.push(marker);
+
+        lastMarker = L.marker([centre.lat, centre.lng]).addTo(map);
+
+        markers.push(lastMarker);
         createRoute();
+
     }
     function deletePoint()
     {
         if (wayPoints.length < 2) {
-            alert("No waypoints to delete!")
+            bootbox.alert("No waypoints to delete!")
             return;
         }
         map.removeLayer(markers.pop());
@@ -379,8 +329,9 @@ var myMap = (function ($) {
             totalDesc += descents[leg];
         }
         totalDist = (Math.round(totalDist * 10) / 10);
-        map.messagebox.show('Dist: ' + totalDist + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc );
-
+       // map.messagebox.show('Dist: ' + totalDist + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc );
+        //bootbox.alert('Dist: ' + totalDist + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc);
+        lastMarker.bindPopup('Dist: ' + totalDist + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc).openPopup(); 
     }
    
     function clearRoute() {
