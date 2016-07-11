@@ -21,29 +21,21 @@ var thisIsDevice = false;
         //}, true, null);
 
         //myMap.create();
+        myMap.getData();
     });
 
     function onDeviceReady() {
         thisIsDevice = true;
         // Handle the Cordova pause and resume events
-        //document.addEventListener( 'pause', onPause.bind( this ), false );
-        //document.addEventListener( 'resume', onResume.bind( this ), false );
+        document.addEventListener( 'pause', onPause.bind( this ), false );
+        document.addEventListener( 'resume', onResume.bind( this ), false );
 
         //// TODO: Cordova has been loaded. Perform any initialization that requires Cordova here.
         //configureBackgroundGeoLocation();
         //myMap.watchPosition();
-        //TTS.speak('hello, world!', function () {
-        //    alert('success');
-        //}, function (reason) {
-        //    alert(reason);
-        //});
+
 
     }
-    //jQuery(function ($) {
-    //    document.addEventListener('deviceready', onDeviceReady.bind(this), false);
-    //})(jQuery);
-
-
 
     function onPause() {
         ///**
@@ -52,7 +44,7 @@ var thisIsDevice = false;
         //* determine start/stop of device.
         //*/
         //    console.log('- onPause');
-        //    myMap.stopPositionWatch();
+       // myMap.stopPositionWatch();
     };
 
     function onResume() {
@@ -60,7 +52,7 @@ var thisIsDevice = false;
         //* Once in foreground, re-engage foreground geolocation watch with standard Cordova GeoLocation api
         //*/
         //    console.log('- onResume');
-        //    myMap.watchPosition();
+        //myMap.watchPosition();
     };
 
 

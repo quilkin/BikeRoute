@@ -20,7 +20,7 @@ var myMap = (function ($) {
         location = null,
         path,
         aggressiveEnabled,
-        locations = [],
+        //locations = [],
         iconCentre1,
         messageBox,
         routeLine = null,
@@ -28,11 +28,17 @@ var myMap = (function ($) {
         ascents = [],
         descents = [],
         routes = [],
+        routePoints = [],
+        wayPoints = [],
         markers = [],
         legs = [],
         lastMarker = null,
-        
-        routePoints = [],
+        lastInstruction = null,
+        lastInstructionTime = null,
+        lastInstructionCount = 0,
+        watchID = null,
+        currentLat, currentLong,
+        currentPosMarker = null,
         followedPoints = [],
         polyLineAll = '',
         nearestPoint = null,
@@ -44,7 +50,7 @@ var myMap = (function ($) {
         nearest,nextNearest,
         dialog, dialogContents;
 
-    var wayPoints = [];
+ 
     var bikeType = 'Hybrid';
     var useRoads = 5;
     var useHills = 5;
@@ -55,10 +61,10 @@ var myMap = (function ($) {
     var redIcon = new L.Icon({
         iconUrl: 'scripts/images/marker-icon-red.png',
         shadowUrl: 'scripts/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
+        iconSize: [15, 25],
+        iconAnchor: [8, 25],
+        popupAnchor: [1, -20],
+        shadowSize: [2, 2]
     });
 
     var greenIcon = new L.Icon({
@@ -107,19 +113,82 @@ var myMap = (function ($) {
         createCorner('center', 'right');
 
     }
-    //var bootstrap_alert = function () { }
-    //bootstrap_alert.warning = function (message) {
-    //    $('#alert_placeholder').html('<div class="alert"><a class="close" data-dismiss="alert">×</a><span>' + message + '</span></div>')
-    //}
+    function onGeoSuccess(position) {
+        currentLat = position.coords.latitude;
+        currentLong = position.coords.longitude;
+        if (thisIsDevice) {
+            if (currentPosMarker != null)
+                map.removeLayer(currentPosMarker);
+            currentPosMarker = L.marker([currentLat, currentLong], { icon: redIcon }).addTo(map);
+            myMap.checkInstructions(currentLat, currentLong);
+        }
+    }
 
+    function onGeoError(error) {
+        bootbox.alert('code: ' + error.code + '\n' +
+              'message: ' + error.message + '\n');
+    }
+    myMap.stopPositionWatch = function () {
+        navigator.geolocation.clearWatch(watchID);
+    };
+    myMap.watchPosition = function () {
+        watchID = navigator.geolocation.watchPosition(onGeoSuccess, onGeoError, { timeout: 10000 });
+    };
 
-    if (thisIsDevice) {
+    function TTS_UK(mytext) {
+        mytext = mytext.replace('Bike', 'Cycle');
+        if (lastInstruction != null) {
+            if (lastInstruction === mytext) {
+                // don't repeat too often!!
+                var now = new Date();
+                var diff = Math.abs(now - lastInstructionTime);
+                if (diff < 30000)
+                    return;
+                if (lastInstructionCount > 3)
+                    return;
+            }
+            else {
+                lastInstructionCount = 0;
+            }
+        }
+        TTS.speak(
+            {
+                text: mytext,
+                locale: 'en-GB',
+                 rate: 1
+            }, 
+            function(){
+                lastInstructionTime = new Date();
+                lastInstruction = mytext;
+                ++lastInstructionCount;
+            },
+            function (reason) {
+                bootbox.alert("Speech failed: " + reason);
+            }
+        );
+
+        
+
+    }
+
+    myMap.getData = function() {
+        ascents = JSON.parse(localStorage.getItem("ascents")) || [];
+        descents = JSON.parse(localStorage.getItem("descents")) || [];
+        routes = JSON.parse(localStorage.getItem("routes")) || [];
+        routePoints = JSON.parse(localStorage.getItem("routepoints")) || [];
+        wayPoints = JSON.parse(localStorage.getItem("waypoints")) || [];
+        markers = JSON.parse(localStorage.getItem("markers")) || [];
+    }
+
+    if (L.Browser.mobile) {
         // get the actual location
         navigator.geolocation.getCurrentPosition(function (position) {
+            $('#waiting').hide();
             var latitude = position.coords.latitude;
             var longitude = position.coords.longitude;
             var options = { timeout: 5000, position: 'bottomleft' }
-            map = L.map('map', { messagebox: true }).setView([latitude, longitude], 14);
+
+            map = L.map('map').setView([latitude, longitude], 14);
 
             L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
@@ -127,17 +196,23 @@ var myMap = (function ($) {
 
             }).addTo(map);
             AddControls();
+
+            myMap.watchPosition();
+            
+            //watchID = navigator.geolocation.watchPosition(onGeoSuccess, onGeoError, { timeout: 10000 });
+
+
         });
     }
     else {
          //get the list of points to map
         MapData.json('GetLocations', "POST", null, function (locs) {
-
+            $('#waiting').hide();
             // first point will be the latest one recorded, use this to centre the map
             location = locs[0];
             var options = { timeout: 5000, position: 'bottomleft' }
-            map = L.map('map', { messagebox: true }).setView([location.latitude, location.longitude], 14);
-
+            map = L.map('map').setView([location.latitude, location.longitude], 14);
+            
             L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
                 maxZoom: 18
@@ -181,13 +256,20 @@ var myMap = (function ($) {
 
         }, true, null);
     }
+
+    for (var r=0; r<routes.length; r++) {
+        routes[r].addTo(map);
+    }
+    for (var m = 0; m < markers.length; m++) {
+        markers[m].addTo(map);
+    }
     function AddControls() {
 
         addControlPlaceholders(map);
 
-        //if (L.Browser.mobile == false) {
-        //    L.control.mousePosition().addTo(map);
-        //}
+        if (L.Browser.mobile == false) {
+            L.control.mousePosition().addTo(map);
+        }
 
         // a cross-hair for choosing points
         iconCentre1 = L.control({ position: 'centerleft' });
@@ -207,9 +289,9 @@ var myMap = (function ($) {
         L.easyButton('<span class="bigfont">&odot;</span>', options).addTo(map);
         L.easyButton('<span class="bigfont">&cross;</span>', clearRoute).addTo(map);
         myMap.bikeType = "Hybrid";
-        map.messagebox.options.timeout = 10000;
-        map.messagebox.setPosition('bottomleft');
-        map.messagebox.show('');
+        //map.messagebox.options.timeout = 10000;
+        //map.messagebox.setPosition('bottomleft');
+        //map.messagebox.show('');
     }
     function options() {
         if (wayPoints.length > 2) {
@@ -279,20 +361,13 @@ var myMap = (function ($) {
         var centre = map.getCenter();
         wayPoints.push(L.latLng(centre.lat, centre.lng));
 
- 
-        //if (typeof TTS != 'undefined') {
-        //    TTS.speak("Added a waypoint", function () {
-        //        null;
-        //    }, function (reason) {
-        //        bootbox.alert(reason);
-        //    });
-        //}
 
         if (wayPoints.length === 1) {
             var marker = L.marker([centre.lat, centre.lng], { icon: greenIcon }).addTo(map);
             markers.push(marker);
             // this is first (starting) point. Need more points!
             distances = [];
+            //TTS.speak("Starting route");
             return;
         }
 
@@ -529,6 +604,12 @@ var myMap = (function ($) {
         ascents.push(legAsc);
         descents.push(legDesc);
         showStats();
+        localStorage.setItem("ascents", JSON.stringify(ascents));
+        localStorage.setItem("descents", JSON.stringify(descents));
+        localStorage.setItem("routes", JSON.stringify(routes));
+        localStorage.setItem("routepoints", JSON.stringify(routePoints));
+        localStorage.setItem("waypoints", JSON.stringify(wayPoints));
+        localStorage.setItem("markers", JSON.stringify(markers));
     }
 
     function pointToLine(point0,line1,line2) {
@@ -613,6 +694,13 @@ var myMap = (function ($) {
     }
 
     myMap.checkInstructions = function (lat, lon) {
+        checkInstructions(lat,lon);
+    }
+
+    function checkInstructions(lat, lon) {
+
+        if (routePoints == null)
+            return;
         var thisPoint = [lat, lon];
 
         followedPoints.push(thisPoint);
@@ -648,12 +736,21 @@ var myMap = (function ($) {
             }
         }
         
-        if (onTrack) {
-            map.messagebox.show(nearestPoint);
+        if (onTrack && nearestPoint != null) {
+            //map.messagebox.show(nearestPoint);
             // find the appropriate instruction to provide
             var instruction = routePoints[nearestPoint][2];
-            if (instruction.length > 2)
-                responsiveVoice.speak(instruction);
+            if (instruction.length > 2) {
+                if (L.Browser.mobile)
+                    TTS_UK(instruction);
+                else {
+                    var popup = L.popup()
+                        .setLatLng(thisPoint)
+                        .setContent(instruction)
+                        .openOn(map);
+                }
+                    
+            }
         }
         else if (lastNearestPoint) {
             if (lastNearestPoint >= routePoints.length) {
@@ -662,7 +759,9 @@ var myMap = (function ($) {
              // convert offset to multiples of ten metres
             var dist = Math.floor(distanceBetweenCoordinates(thisPoint, routePoints[lastNearestPoint])/10)*10;
             var bearing = bearingFromCoordinate(thisPoint, routePoints[lastNearestPoint]);
-            responsiveVoice.speak(offTrack1 + dist + offTrack2 + bearing);
+            if (L.Browser.mobile) {
+                TTS_UK(offTrack1 + dist + offTrack2 + bearing);
+            }
         }
         return (onTrack);
     }
