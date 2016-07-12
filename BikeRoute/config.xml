@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<widget xmlns:cdv="http://cordova.apache.org/ns/1.0" xmlns:vs="http://schemas.microsoft.com/appx/2014/htmlapps" id="io.cordova.myapp1f624c" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" defaultlocale="en-US">
+<widget xmlns:cdv="http://cordova.apache.org/ns/1.0" xmlns:vs="http://schemas.microsoft.com/appx/2014/htmlapps" id="com.quilkin.bikeroute" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" defaultlocale="en-GB" android-versionCode="1">
   <name>BikeRoute</name>
-  <description>A blank project that uses Apache Cordova to help you build an app that targets multiple mobile platforms: Android, iOS, Windows, and Windows Phone.</description>
-  <author href="http://cordova.io" email="dev@cordova.apache.org">Apache Cordova Team </author>
+  <description>For calculating cycling routes and giving spoken instructions along the way</description>
+  <author href="http://cordova.io" email="dev@cordova.apache.org">Quilkin</author>
   <content src="index.html" />
   <access origin="*" />
   <vs:features />
@@ -109,4 +109,6 @@
   <plugin name="cordova-plugin-compat" version="1.0.0" />
   <plugin name="cordova-plugin-whitelist" version="1.2.2" />
   <plugin name="cordova-plugin-tts" version="0.2.3" src="https://github.com/vilic/cordova-plugin-tts" />
+  <preference name="android-minSdkVersion" value="19" />
+  <preference name="android-targetSdkVersion" value="19" />
 </widget>

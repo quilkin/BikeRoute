@@ -1,0 +1,7 @@
+keytool -genkey -v -keystore c:\quilkin.keystore -alias quilkin -keyalg RSA -keysize 2048 -validity 10000
+
+jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore c:\quilkin.keystore bikeroute-release.apk quilkin
+
+jarsigner -verify -verbose -certs bikeroute-release.apk
+
+zipalign -v 4 bikeroute-release-unaligned.apk bikeroute-release.apk

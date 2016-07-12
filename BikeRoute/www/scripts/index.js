@@ -21,7 +21,7 @@ var thisIsDevice = false;
         //}, true, null);
 
         //myMap.create();
-        myMap.getData();
+        //myMap.getData();
     });
 
     function onDeviceReady() {

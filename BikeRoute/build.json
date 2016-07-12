@@ -1,10 +1,10 @@
 {
      "android": {
          "release": {
-             "keystore": "",
-             "storePassword": "",
-             "alias": "",
-             "password" : "",
+             "keystore": "C:\\quilkin.keystore",
+             "storePassword": "icespy1643",
+             "alias": "chrisF",
+             "password" : "icespy1643",
              "keystoreType": ""
          }
      }

@@ -55,7 +55,7 @@ var myMap = (function ($) {
     var useRoads = 5;
     var useHills = 5;
 
-    var tempData = [];
+    //var tempData = [];
 
 
     var redIcon = new L.Icon({
@@ -174,10 +174,10 @@ var myMap = (function ($) {
     myMap.getData = function() {
         ascents = JSON.parse(localStorage.getItem("ascents")) || [];
         descents = JSON.parse(localStorage.getItem("descents")) || [];
-        routes = JSON.parse(localStorage.getItem("routes")) || [];
+        //routes = JSON.parse(localStorage.getItem("routes")) || [];
         routePoints = JSON.parse(localStorage.getItem("routepoints")) || [];
         wayPoints = JSON.parse(localStorage.getItem("waypoints")) || [];
-        markers = JSON.parse(localStorage.getItem("markers")) || [];
+        distances = JSON.parse(localStorage.getItem("distances")) || [];
     }
 
     if (L.Browser.mobile) {
@@ -198,7 +198,7 @@ var myMap = (function ($) {
             AddControls();
 
             myMap.watchPosition();
-            
+            loadOldRoutes();
             //watchID = navigator.geolocation.watchPosition(onGeoSuccess, onGeoError, { timeout: 10000 });
 
 
@@ -252,16 +252,40 @@ var myMap = (function ($) {
                 }
             }
             AddControls();
-
+            loadOldRoutes();
 
         }, true, null);
     }
+    myMap.getData();
 
-    for (var r=0; r<routes.length; r++) {
-        routes[r].addTo(map);
-    }
-    for (var m = 0; m < markers.length; m++) {
-        markers[m].addTo(map);
+    function loadOldRoutes() {
+        //var locations = [];
+        //for (var r = 0; r < routePoints.length; r++) {
+        //    var lat = routePoints[r][0];
+        //    var lon = routePoints[r][1];
+        //    locations.push([lat, lon]);
+        //}
+
+        var route = new L.Polyline(routePoints, {
+            color: 'red',
+            opacity: 1,
+            weight: 2,
+            clickable: false
+        }).addTo(map);
+        routes.push(route);
+
+
+        
+        for (var m = 0; m < wayPoints.length; m++) {
+            if (m == 0) {
+                lastMarker = L.marker([wayPoints[m].lat, wayPoints[m].lng], { icon: greenIcon }).addTo(map);
+            }
+            else {
+                lastMarker = L.marker([wayPoints[m].lat, wayPoints[m].lng]).addTo(map);
+            }
+            markers.push(lastMarker);
+
+        }
     }
     function AddControls() {
 
@@ -289,9 +313,7 @@ var myMap = (function ($) {
         L.easyButton('<span class="bigfont">&odot;</span>', options).addTo(map);
         L.easyButton('<span class="bigfont">&cross;</span>', clearRoute).addTo(map);
         myMap.bikeType = "Hybrid";
-        //map.messagebox.options.timeout = 10000;
-        //map.messagebox.setPosition('bottomleft');
-        //map.messagebox.show('');
+
     }
     function options() {
         if (wayPoints.length > 2) {
@@ -367,6 +389,7 @@ var myMap = (function ($) {
             markers.push(marker);
             // this is first (starting) point. Need more points!
             distances = [];
+            routePoints = [];
             //TTS.speak("Starting route");
             return;
         }
@@ -413,16 +436,19 @@ var myMap = (function ($) {
         bootbox.confirm("Do you really want to clear your complete route?", function (result) {
             if (result===true)
             {
-                for (var r = 0; r < routes.length; r++) {
+                var length = routes.length;
+                for (var r = 0; r < length; r++) {
                     map.removeLayer(routes.pop());
                 }
-                for (var m = 0; m < markers.length; m++) {
+                length = markers.length;
+                for (var m = 0; m < length; m++) {
                     map.removeLayer(markers.pop());
                 }
                 distances = [];
                 ascents = [];
                 descents = [];
                 wayPoints = [];
+                routePoints = [];
             }
         })
     }
@@ -504,7 +530,7 @@ var myMap = (function ($) {
 
     function getRoute(response) {
        
-        routePoints = [];
+        //routePoints = [];
         followedPoints = [];
         nearestPoint = null;
         onTrack = false;
@@ -554,17 +580,17 @@ var myMap = (function ($) {
 
             }
         }
-        // add dummy final points to help with array indexing later
-        var lastPoint = routePoints[routePoints.length - 1];
-        routePoints.push(lastPoint);
-        routePoints.push(lastPoint);
+        //// add dummy final points to help with array indexing later
+        //var lastPoint = routePoints[routePoints.length - 1];
+        //routePoints.push(lastPoint);
+        //routePoints.push(lastPoint);
 
         // get elevation data
         var data = {
             range: true,
             encoded_polyline: polyLineAll
         }
-        tempData.push(data);
+        //tempData.push(data);
         MapData.jsonMapzen(true,data, getElevations);
 
     }
@@ -606,10 +632,10 @@ var myMap = (function ($) {
         showStats();
         localStorage.setItem("ascents", JSON.stringify(ascents));
         localStorage.setItem("descents", JSON.stringify(descents));
-        localStorage.setItem("routes", JSON.stringify(routes));
+        //localStorage.setItem("routes", JSON.stringify(routes));
         localStorage.setItem("routepoints", JSON.stringify(routePoints));
         localStorage.setItem("waypoints", JSON.stringify(wayPoints));
-        localStorage.setItem("markers", JSON.stringify(markers));
+        localStorage.setItem("distances", JSON.stringify(distances));
     }
 
     function pointToLine(point0,line1,line2) {
@@ -721,8 +747,11 @@ var myMap = (function ($) {
         else {
             // we are (or were) on track, see how far we are from the nearest route segment (line)
             lastNearestPoint = nearestPoint;
-            nearest = pointToLine(thisPoint, routePoints[nearestPoint], routePoints[nearestPoint + 1]);
-            nextNearest = pointToLine(thisPoint, routePoints[nearestPoint + 1], routePoints[nearestPoint + 2]);
+            var threePoints1 = nearestPoint;
+            var threePoints2 = (nearestPoint < routePoints.length - 1) ? nearestPoint + 1 : nearestPoint;
+            var threePoints3 = (nearestPoint < routePoints.length - 2) ? nearestPoint + 2 : nearestPoint;
+            nearest = pointToLine(thisPoint, routePoints[threePoints1], routePoints[threePoints2]);
+            nextNearest = pointToLine(thisPoint, routePoints[threePoints2], routePoints[threePoints3]);
             onTrack = (nearest < near);
             if (nextNearest < near) {
                 // we have moved on nearer to the next point
