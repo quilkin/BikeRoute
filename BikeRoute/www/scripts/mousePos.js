@@ -34,7 +34,6 @@
         else {
             this._container.innerHTML = prefixAndValue;
         }
-        myMap.planRouteLine(lat, lng);
     }
 
 });

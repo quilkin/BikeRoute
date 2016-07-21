@@ -1,16 +1,20 @@
 ﻿/// <reference path="bootbox.min.js" />
 /// <reference path="mapData.js" />
 /// <reference path="index.js" />
+/// <reference path="utils.js" />
 
 
 var myMap = (function ($) {
     "use strict";
 
     aggressiveEnabled: false;
-    // distance to check if on track or not (approx 20 m)
-    var near = 0.0002;
-    // distance to check if too far from track (appox 500m)
-    var far = 0.05;
+    // distance to check if on track or not (approx 100 m)
+    // approximate to metres.
+    // one degree = 100 km approx
+    // **ToDo** : this won't work at high latitudes!
+    var near = 0.001;
+    // distance to check if too far from track
+    var far = 500;
     // message when off track
     var offTrack1 = "Attention! You are "
     var offTrack2 = " metres off course. Correct course is to the "
@@ -39,12 +43,12 @@ var myMap = (function ($) {
         watchID = null,
         currentLat, currentLong,
         currentPosMarker = null,
-        followedPoints = [],
+       // followedPoints = [],
         polyLineAll = '',
         nearestPoint = null,
         lastNearestPoint = null,
         onTrack = false,
-        lastLine1, lastLine2, lastDem,
+
 
         maxGrad = 0,
         nearest,nextNearest,
@@ -54,9 +58,6 @@ var myMap = (function ($) {
     var bikeType = 'Hybrid';
     var useRoads = 5;
     var useHills = 5;
-
-    //var tempData = [];
-
 
     var redIcon = new L.Icon({
         iconUrl: 'scripts/images/marker-icon-red.png',
@@ -135,8 +136,11 @@ var myMap = (function ($) {
         watchID = navigator.geolocation.watchPosition(onGeoSuccess, onGeoError, { timeout: 10000 });
     };
 
-    function TTS_UK(mytext) {
+    function speak(mytext,point) {
+        if (mytext.length < 2)
+            return;
         mytext = mytext.replace('Bike', 'Cycle');
+        
         if (lastInstruction != null) {
             if (lastInstruction === mytext) {
                 // don't repeat too often!!
@@ -151,23 +155,33 @@ var myMap = (function ($) {
                 lastInstructionCount = 0;
             }
         }
-        TTS.speak(
-            {
-                text: mytext,
-                locale: 'en-GB',
-                 rate: 1
-            }, 
-            function(){
-                lastInstructionTime = new Date();
-                lastInstruction = mytext;
-                ++lastInstructionCount;
-            },
-            function (reason) {
-                bootbox.alert("Speech failed: " + reason);
-            }
-        );
+        if (L.Browser.mobile) {
+            TTS.speak(
+                {
+                    text: mytext,
+                    locale: 'en-GB',
+                    rate: 1
+                },
+                setLastInstruction,
+                function (reason) {
+                    bootbox.alert("Speech failed: " + reason);
+                }
+            );
+        }
+        else {
+            // simulate the speech with a bubble on the screen
+            var popup = L.popup()
+                .setLatLng(point)
+                .setContent(mytext)
+                .openOn(map);
+            setLastInstruction();
+        }
 
-        
+        function setLastInstruction() {
+            lastInstructionTime = new Date();
+            lastInstruction = mytext;
+            ++lastInstructionCount;
+        }
 
     }
 
@@ -344,7 +358,7 @@ var myMap = (function ($) {
                 '</div><div class="radio"> <label for="hills-1"> ' +
                 '<input type="radio" name="hills" id="hills-1" value="5" ' + ((useHills >= 3 && useHills <= 7) ? 'checked="checked"' : '') + '"> A few </label> ' +
                 '</div><div class="radio"> <label for="hills-2"> ' +
-                '<input type="radio" name="hills" id="hills-2" value="9"' + ((useHills > 7) ? 'checked="checked"' : '') + '"> Lots </label> ' +
+                '<input type="radio" name="hills" id="hills-2" value="10"' + ((useHills > 7) ? 'checked="checked"' : '') + '"> Lots </label> ' +
                 '</div> ' +
                 '</div> </div>' +
                 '<div class="form-group"> ' +
@@ -355,7 +369,7 @@ var myMap = (function ($) {
                 '</div><div class="radio"> <label for="roads-1"> ' +
                 '<input type="radio" name="roads" id="roads-1" value="5" ' + ((useRoads >= 3 && useRoads <= 7) ? 'checked="checked"' : '') + '"> A few </label> ' +
                 '</div><div class="radio"> <label for="roads-2"> ' +
-                '<input type="radio" name="roads" id="roads-2" value="9"' + ((useRoads > 7) ? 'checked="checked"' : '') + '"> More </label> ' +
+                '<input type="radio" name="roads" id="roads-2" value="10"' + ((useRoads > 7) ? 'checked="checked"' : '') + '"> More </label> ' +
                 '</div> ' +
                 '</div> </div>' +
                 '</form> </div>  </div>';
@@ -453,55 +467,7 @@ var myMap = (function ($) {
         })
     }
     
-    // Code from Mapzen site
-    function polyLineDecode(str, precision) {
-        var index = 0,
-            lat = 0,
-            lng = 0,
-            coordinates = [],
-            shift = 0,
-            result = 0,
-            byte = null,
-            latitude_change,
-            longitude_change,
-            factor = Math.pow(10, precision || 6);
-
-        // Coordinates have variable length when encoded, so just keep
-        // track of whether we've hit the end of the string. In each
-        // loop iteration, a single coordinate is decoded.
-        while (index < str.length) {
-
-            // Reset shift, result, and byte
-            byte = null;
-            shift = 0;
-            result = 0;
-
-            do {
-                byte = str.charCodeAt(index++) - 63;
-                result |= (byte & 0x1f) << shift;
-                shift += 5;
-            } while (byte >= 0x20);
-
-            latitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-
-            shift = result = 0;
-
-            do {
-                byte = str.charCodeAt(index++) - 63;
-                result |= (byte & 0x1f) << shift;
-                shift += 5;
-            } while (byte >= 0x20);
-
-            longitude_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
-
-            lat += latitude_change;
-            lng += longitude_change;
-
-            coordinates.push([lat / factor, lng / factor]);
-        }
-
-        return coordinates;
-    };
+    
 
     function createRoute()
     {
@@ -531,7 +497,7 @@ var myMap = (function ($) {
     function getRoute(response) {
        
         //routePoints = [];
-        followedPoints = [];
+        //followedPoints = [];
         nearestPoint = null;
         onTrack = false;
         polyLineAll = '';
@@ -559,7 +525,7 @@ var myMap = (function ($) {
             var pline = leg.shape;
             polyLineAll = polyLineAll + pline;
             //polyLineAll = pline;
-            var locations = polyLineDecode(pline, 6);
+            var locations = utils.polyLineDecode(pline, 6);
 
             var colour = 'red';
 
@@ -575,16 +541,12 @@ var myMap = (function ($) {
             for (var loc = 0; loc < locations.length; loc++) {
                 // save points passed through, and store any instruction for each point 
                 var p1 = locations[loc][0], p2 = locations[loc][1];
-                var instr = legPoints[loc];
+                //var instr = (loc > 0) ? legPoints[loc - 1] : legPoints[loc];
+                var instr =  legPoints[loc];
                 routePoints.push([p1, p2, instr]);
 
             }
         }
-        //// add dummy final points to help with array indexing later
-        //var lastPoint = routePoints[routePoints.length - 1];
-        //routePoints.push(lastPoint);
-        //routePoints.push(lastPoint);
-
         // get elevation data
         var data = {
             range: true,
@@ -638,103 +600,19 @@ var myMap = (function ($) {
         localStorage.setItem("distances", JSON.stringify(distances));
     }
 
-    function pointToLine(point0,line1,line2) {
-        // find min distance from point0 to line defined by points line1 and line2
-        // equation from Wikipedia
-        var numer,dem;
-        var x1 = line1[0], x2 = line2[0], x0 = point0[0];
-        var y1 = line1[1], y2 = line2[1], y0 = point0[1];
-        
-        if (line1===lastLine1 && line2 === lastLine2) {
-            // same line as we checked before, can save time by not recalculating sqaure root on demoninator
-            dem = lastDem;
-        }
-        else {
-            dem = Math.sqrt((y2 - y1) * (y2 - y1) + (x2 - x1) * (x2 - x1));
-            lastLine1 = line1;
-            lastLine2 = line2;
-            lastDem = dem;
-        }
-        numer =  Math.abs((y2-y1)*x0 - (x2-x1)*y0 + x2*y1 - y2*x1);
-        return numer / dem;
-
-    }
-    function distanceBetweenCoordinates(point0, point1)
-    {
-        var x1 = point0[0], x2 = point1[0];
-        var y1 = point0[1], y2 = point1[1];
-        var R = 6371e3; // metres
-        var φ1 = x1 / 57.2958;
-        var φ2 = x2 / 57.2958;
-        var Δφ = (x2 - x1) / 57.2958;
-        var Δλ = (y2 - y1) / 57.2958;
-
-        var a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-        var d = R * c;
-        return d;
-
-    }
-    function bearingFromCoordinate(point0, point1) {
-
-        var x1 = point0[0], x2 = point1[0];
-        var y1 = point0[1], y2 = point1[1];
-        var dLon = (y2 - y1);
-        var y = Math.sin(dLon) * Math.cos(x2);
-        var x = Math.cos(x1) * Math.sin(x2) - Math.sin(x1)
-                * Math.cos(x2) * Math.cos(dLon);
-        var brng = Math.atan2(y, x);
-        brng = brng * 57.2958;
-        brng = (brng + 360) % 360;
-
-        if (brng < 22.5)
-            return 'North';
-        if (brng < 67.5)
-            return 'North East';
-        if (brng < 112.5)
-            return 'East';
-        if (brng < 157.5)
-            return 'South East';
-        if (brng < 202.5)
-            return 'South';
-        if (brng < 247.5)
-            return 'South West';
-        if (brng < 292.5)
-            return 'West';
-        if (brng < 337.5)
-            return 'North West';
-        return 'North';
-    }
-
-    myMap.planRouteLine = function (lat, lon) {
-        //var thisPoint = [lat, lon];
-        //var centre = map.getCenter();
-        //if (routeLine != null)
-        //{
-        //    map.removeLayer(routeLine);
-        //}
-        //routeLine = L.polyline([thisPoint,centre], { color: 'red' }).addTo(map);
-    }
+   
 
     myMap.checkInstructions = function (lat, lon) {
-        checkInstructions(lat,lon);
-    }
-
-    function checkInstructions(lat, lon) {
-
         if (routePoints == null)
             return;
         var thisPoint = [lat, lon];
 
-        followedPoints.push(thisPoint);
+        //followedPoints.push(thisPoint);
         if (nearestPoint === null && onTrack === false) {
             // Nowhere near?. Check point against all points in the route
             for (var loc = 0; loc < routePoints.length; loc++) {
                 var point = routePoints[loc];
-                // within 20 metres (approx)?
+                var dist = utils.distanceBetweenCoordinates(thisPoint, point);
                 if (Math.abs(point[0] - lat) < near) {
                     if (Math.abs(point[1] - lon) < near) {
                         nearestPoint = loc;
@@ -745,51 +623,45 @@ var myMap = (function ($) {
             }
         }
         else {
-            // we are (or were) on track, see how far we are from the nearest route segment (line)
+            // we are (or were) on track, see how far we are from the nearest route segments 
             lastNearestPoint = nearestPoint;
-            var threePoints1 = nearestPoint;
-            var threePoints2 = (nearestPoint < routePoints.length - 1) ? nearestPoint + 1 : nearestPoint;
-            var threePoints3 = (nearestPoint < routePoints.length - 2) ? nearestPoint + 2 : nearestPoint;
-            nearest = pointToLine(thisPoint, routePoints[threePoints1], routePoints[threePoints2]);
-            nextNearest = pointToLine(thisPoint, routePoints[threePoints2], routePoints[threePoints3]);
+            var threePoints1 = (nearestPoint > 0) ? nearestPoint - 1 : nearestPoint;
+            var threePoints2 = nearestPoint;
+            var threePoints3 = (nearestPoint < routePoints.length - 1) ? nearestPoint + 1 : nearestPoint;
+            // how far are we from here to a line joining the current two route points?
+            nearest = utils.pointToLine(thisPoint, routePoints[threePoints1], routePoints[threePoints2]);
+            // how far are we from here to a line joining the next two route points?
+            nextNearest = utils.pointToLine(thisPoint, routePoints[threePoints2], routePoints[threePoints3]);
             onTrack = (nearest < near);
-            if (nextNearest < near) {
+            if (nextNearest < nearest && nextNearest < near) {
                 // we have moved on nearer to the next point
                 ++nearestPoint;
-                onTrack = (nextNearest < near);
+                // for debug
+                //speak(nearestPoint.toString(), routePoints[nearestPoint]);
+                onTrack = true;
             }
             if (!onTrack) {
                 // need to start looking from scratch again
-                
                 nearestPoint = null;
             }
         }
         
-        if (onTrack && nearestPoint != null) {
-            //map.messagebox.show(nearestPoint);
+        if (onTrack && nearestPoint != null && nearestPoint<routePoints.length) {
             // find the appropriate instruction to provide
             var instruction = routePoints[nearestPoint][2];
-            if (instruction.length > 2) {
-                if (L.Browser.mobile)
-                    TTS_UK(instruction);
-                else {
-                    var popup = L.popup()
-                        .setLatLng(thisPoint)
-                        .setContent(instruction)
-                        .openOn(map);
-                }
-                    
-            }
+            speak(instruction,routePoints[nearestPoint]);
+
         }
         else if (lastNearestPoint) {
             if (lastNearestPoint >= routePoints.length) {
                 lastNearestPoint = routePoints.length - 1;
             }
              // convert offset to multiples of ten metres
-            var dist = Math.floor(distanceBetweenCoordinates(thisPoint, routePoints[lastNearestPoint])/10)*10;
-            var bearing = bearingFromCoordinate(thisPoint, routePoints[lastNearestPoint]);
-            if (L.Browser.mobile) {
-                TTS_UK(offTrack1 + dist + offTrack2 + bearing);
+            var dist = Math.floor(utils.distanceBetweenCoordinates(thisPoint, routePoints[lastNearestPoint]) / 10) * 10;
+            if (dist < far) {
+                var bearing = utils.bearingFromCoordinate(thisPoint, routePoints[lastNearestPoint]);
+                var warning = offTrack1 + dist + offTrack2 + bearing;
+                speak(warning, routePoints[lastNearestPoint]);
             }
         }
         return (onTrack);
