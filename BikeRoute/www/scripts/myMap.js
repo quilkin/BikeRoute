@@ -13,8 +13,8 @@ var myMap = (function ($) {
     // one degree = 100 km approx
     // **ToDo** : this won't work at high latitudes!
     var near = 0.001;
-    // distance to check if too far from track
-    var far = 500;
+    // distance to check if too far from track to bother reporting error (metres)
+    var far = 1000;
     // message when off track
     var offTrack1 = "Attention! You are "
     var offTrack2 = " metres off course. Correct course is to the "
@@ -133,7 +133,7 @@ var myMap = (function ($) {
         navigator.geolocation.clearWatch(watchID);
     };
     myMap.watchPosition = function () {
-        watchID = navigator.geolocation.watchPosition(onGeoSuccess, onGeoError, { timeout: 10000 });
+        watchID = navigator.geolocation.watchPosition(onGeoSuccess, onGeoError, { timeout: 10000, enableHighAccuracy: true });
     };
 
     function speak(mytext,point) {
@@ -141,8 +141,10 @@ var myMap = (function ($) {
             return;
         mytext = mytext.replace('Bike', 'Cycle');
         
+        
         if (lastInstruction != null) {
-            if (lastInstruction === mytext) {
+            if (lastInstruction === mytext ||
+                (mytext.lastIndexOf(offTrack1, 0) === 0 && lastInstruction.lastIndexOf(offTrack1, 0) === 0)) {
                 // don't repeat too often!!
                 var now = new Date();
                 var diff = Math.abs(now - lastInstructionTime);
@@ -544,7 +546,13 @@ var myMap = (function ($) {
                 //var instr = (loc > 0) ? legPoints[loc - 1] : legPoints[loc];
                 var instr =  legPoints[loc];
                 routePoints.push([p1, p2, instr]);
-
+                //// for debug only
+                //var circle = L.circle([p1, p2], 10, {
+                //    color: 'red',
+                //    fillColor: 'red',
+                //    fillOpacity: 0.5
+                //}).addTo(map);
+                //circle.bindPopup(loc.toString());
             }
         }
         // get elevation data
