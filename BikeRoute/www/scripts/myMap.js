@@ -118,6 +118,11 @@ var myMap = (function ($) {
             if (currentPosMarker != null)
                 map.removeLayer(currentPosMarker);
             currentPosMarker = L.marker([currentLat, currentLong], { icon: redIcon }).addTo(map);
+            if (nearestPoint > 2) {
+                // have left start, keep current location in centre of screen
+                var zoom = map.getZoom();
+                map.setView([currentLat, currentLong], zoom);
+            }
             myMap.checkInstructions(currentLat, currentLong);
         }
     }
@@ -327,7 +332,7 @@ var myMap = (function ($) {
         L.easyButton('<span class="bigfont">&circlearrowleft;</span>', deletePoint).addTo(map);
         L.easyButton('<span class="bigfont">&odot;</span>', options).addTo(map);
         L.easyButton('<span class="bigfont">&cross;</span>', clearRoute).addTo(map);
-        myMap.bikeType = "Hybrid";
+        //myMap.bikeType = "Hybrid";
 
     }
     function options() {
@@ -349,6 +354,8 @@ var myMap = (function ($) {
                 '<input type="radio" name="bike" id="bike-2" value="Hybrid"' + ((bikeType === 'Hybrid') ? 'checked="checked"' : '') + '"> Hybrid/Town </label> ' +
                 '</div><div class="radio"> <label for="bike-3"> ' +
                 '<input type="radio" name="bike" id="bike-3" value="Road" ' + ((bikeType === 'Road') ? 'checked="checked"' : '') + '"> Road </label> ' +
+                '</div><div class="radio"> <label for="bike-4"> ' +
+                '<input type="radio" name="bike" id="bike-4" value="Car" ' + ((bikeType === 'Car') ? 'checked="checked"' : '') + '"> Car </label> ' +
                 '</div> ' +
                 '</div> </div>' +
                 '<div class="form-group"> ' +
@@ -479,18 +486,24 @@ var myMap = (function ($) {
         var points = wayPoints.length;
         var lastPoint = wayPoints[points - 1];
         var lastButOne = wayPoints[points - 2];
+        var costType = "bicycle";
+        var options = {
+            bicycle: {
+                bicycle_type: bikeType,
+                use_roads: useRoads / 10,
+                use_hills: useHills / 10
+            }
+        }
+        if (bikeType == 'Car') {
+            costType = "auto";
+            options = {};
+            
+        }
 
         var data = {
             locations: [{ lat: lastButOne.lat, lon: lastButOne.lng }, { lat: lastPoint.lat, lon: lastPoint.lng }],
-            //locations: points,
-             costing: "bicycle",
-            costing_options: {
-                bicycle: {
-                    bicycle_type: myMap.bikeType,
-                    use_roads: myMap.useRoads / 10,
-                    use_hills: myMap.useHills / 10
-                }
-            }
+            costing: costType,
+            costing_options: options
         }
         MapData.jsonMapzen(false,data,getRoute);
     }
@@ -511,7 +524,8 @@ var myMap = (function ($) {
             var index = 0;
             for (var j = 0; j < leg.maneuvers.length; j++) {
                 var maneuver = leg.maneuvers[j];
-                var instruction = maneuver.verbal_pre_transition_instruction;
+                //var instruction = maneuver.verbal_pre_transition_instruction;
+                var instruction = maneuver.verbal_transition_alert_instruction;
                 var shapeIndex = maneuver.begin_shape_index;
                 legDist += maneuver.length;
                 
@@ -648,7 +662,7 @@ var myMap = (function ($) {
             // how far are we from here to a line joining the previous two route points? (in case we have moved backwards)
             var previous = utils.pointToLine(thisPoint, routePoints[fourPoints1], routePoints[fourPoints2]);
             var onTrack = (nearest < near);
-            if (nextNearest < nearest && nextNearest < near) {
+                if (nextNearest < nearest && nextNearest < near) {
                 // we have moved on nearer to the next point
                 if (nearestPoint < routePoints.length)
                     ++nearestPoint;
@@ -671,7 +685,7 @@ var myMap = (function ($) {
         if (nearestPoint != null && nearestPoint<routePoints.length) {
             // find the appropriate instruction to provide
             var instruction = routePoints[nearestPoint][2];
-            if (instruction.length >= 2) {
+            if (instruction != null && instruction.length >= 2) {
                 speak(instruction, routePoints[nearestPoint]);
                 spoken = true;
             }
