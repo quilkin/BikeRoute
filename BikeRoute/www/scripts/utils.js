@@ -16,6 +16,24 @@
             // convert to approx coords
             return dist / 100000;
         }
+        //Check whether (x0−x1)(x1−x2)+(y0−y1)(y1−y2) and (x0−x2)(x1−x2)+(y0−y2)(y1−y2)
+        // have the same sign (are both positive or both negative). 
+        ///If they do, then the nearest point lies outside the line segment. If they are opposite signs, then the nearest point lies on the line segment.
+        var check1 = (x0 - x1) * (x1 - x2) + (y0 - y1) * (y1 - y2);
+        var check2 = (x0 - x2) * (x1 - x2) + (y0 - y2) * (y1 - y2);
+        if (check1 >= 0 && check2 >= 0)
+        {
+            // outside the line segment
+            var dist = utils.distanceBetweenCoordinates(point0, line1);
+            // convert to approx coords
+            return dist / 100000;
+        }
+        if (check1 < 0 && check2 < 0) {
+            // outside the line segment
+            var dist = utils.distanceBetweenCoordinates(point0, line2);
+            // convert to approx coords
+            return dist / 100000;
+        }
         if (line1 === lastLine1 && line2 === lastLine2) {
             // same line as we checked before, can save time by not recalculating sqaure root on demoninator
             dem = lastDem;

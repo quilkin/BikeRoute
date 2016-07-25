@@ -47,11 +47,8 @@ var myMap = (function ($) {
         polyLineAll = '',
         nearestPoint = null,
         lastNearestPoint = null,
-        onTrack = false,
-
-
+        //onTrack = false,
         maxGrad = 0,
-        nearest,nextNearest,
         dialog, dialogContents;
 
  
@@ -158,13 +155,15 @@ var myMap = (function ($) {
             }
         }
         if (L.Browser.mobile) {
+            setLastInstruction();
             TTS.speak(
                 {
                     text: mytext,
                     locale: 'en-GB',
                     rate: 1
                 },
-                setLastInstruction,
+                //setLastInstruction,
+                null,
                 function (reason) {
                     bootbox.alert("Speech failed: " + reason);
                 }
@@ -501,7 +500,7 @@ var myMap = (function ($) {
         //routePoints = [];
         //followedPoints = [];
         nearestPoint = null;
-        onTrack = false;
+        //onTrack = false;
         polyLineAll = '';
 
         // should only be one leg for each pair of waypoints?
@@ -613,10 +612,12 @@ var myMap = (function ($) {
     myMap.checkInstructions = function (lat, lon) {
         if (routePoints == null)
             return;
+        if (routePoints.length < 2)
+            return;
         var thisPoint = [lat, lon];
 
         //followedPoints.push(thisPoint);
-        if (nearestPoint === null && onTrack === false) {
+        if (nearestPoint === null) {
             // Nowhere near?. Check point against all points in the route
             for (var loc = 0; loc < routePoints.length; loc++) {
                 var point = routePoints[loc];
@@ -624,7 +625,7 @@ var myMap = (function ($) {
                 if (Math.abs(point[0] - lat) < near) {
                     if (Math.abs(point[1] - lon) < near) {
                         nearestPoint = loc;
-                        onTrack = true;
+                        //onTrack = true;
                         break;
                     }
                 }
@@ -633,19 +634,32 @@ var myMap = (function ($) {
         else {
             // we are (or were) on track, see how far we are from the nearest route segments 
             lastNearestPoint = nearestPoint;
-            var threePoints1 = (nearestPoint > 0) ? nearestPoint - 1 : nearestPoint;
-            var threePoints2 = nearestPoint;
-            var threePoints3 = (nearestPoint < routePoints.length - 1) ? nearestPoint + 1 : nearestPoint;
+           
+            // define four points : either end of the current segment, and the segment before and segment after
+            var fourPoints1 = (nearestPoint > 0) ? nearestPoint - 1 : nearestPoint;
+            var fourPoints2 = nearestPoint;
+            var fourPoints3 = (nearestPoint < routePoints.length - 1) ? nearestPoint + 1 : nearestPoint;
+            var fourPoints4 = (nearestPoint < routePoints.length - 2) ? nearestPoint + 2 : nearestPoint;
+ 
             // how far are we from here to a line joining the current two route points?
-            nearest = utils.pointToLine(thisPoint, routePoints[threePoints1], routePoints[threePoints2]);
+            var nearest = utils.pointToLine(thisPoint, routePoints[fourPoints2], routePoints[fourPoints3]);
             // how far are we from here to a line joining the next two route points?
-            nextNearest = utils.pointToLine(thisPoint, routePoints[threePoints2], routePoints[threePoints3]);
-            onTrack = (nearest < near);
+            var nextNearest = utils.pointToLine(thisPoint, routePoints[fourPoints3], routePoints[fourPoints4]);
+            // how far are we from here to a line joining the previous two route points? (in case we have moved backwards)
+            var previous = utils.pointToLine(thisPoint, routePoints[fourPoints1], routePoints[fourPoints2]);
+            var onTrack = (nearest < near);
             if (nextNearest < nearest && nextNearest < near) {
                 // we have moved on nearer to the next point
-                ++nearestPoint;
+                if (nearestPoint < routePoints.length)
+                    ++nearestPoint;
                 // for debug
                 //speak(nearestPoint.toString(), routePoints[nearestPoint]);
+                onTrack = true;
+            }
+            if (previous < nearest && previous < near) {
+                // we have moved back nearer to the previous point
+                if (nearestPoint > 0)
+                    --nearestPoint;
                 onTrack = true;
             }
             if (!onTrack) {
@@ -653,11 +667,14 @@ var myMap = (function ($) {
                 nearestPoint = null;
             }
         }
-        
-        if (onTrack && nearestPoint != null && nearestPoint<routePoints.length) {
+        var spoken = false;
+        if (nearestPoint != null && nearestPoint<routePoints.length) {
             // find the appropriate instruction to provide
             var instruction = routePoints[nearestPoint][2];
-            speak(instruction,routePoints[nearestPoint]);
+            if (instruction.length >= 2) {
+                speak(instruction, routePoints[nearestPoint]);
+                spoken = true;
+            }
 
         }
         else if (lastNearestPoint) {
@@ -670,9 +687,12 @@ var myMap = (function ($) {
                 var bearing = utils.bearingFromCoordinate(thisPoint, routePoints[lastNearestPoint]);
                 var warning = offTrack1 + dist + offTrack2 + bearing;
                 speak(warning, routePoints[lastNearestPoint]);
+                spoken = true;
             }
         }
-        return (onTrack);
+        //if (!spoken && nearestPoint != null)
+        //    speak(nearestPoint.toString(), routePoints[nearestPoint]);
+        return (nearestPoint != null);
     }
     return myMap
 })(jQuery )
