@@ -392,8 +392,10 @@ var myMap = (function ($) {
                         bikeType = $("input[name='bike']:checked").val();
                         useHills = $("input[name='hills']:checked").val();
                         useRoads = $("input[name='roads']:checked").val();
-                        if (wayPoints.length === 2)
+                        if (wayPoints.length === 2) {
+                            routePoints = [];
                             createRoute();
+                        }
                     }
                 }
             }
@@ -510,36 +512,18 @@ var myMap = (function ($) {
 
     function getRoute(response) {
        
-        //routePoints = [];
-        //followedPoints = [];
+
         nearestPoint = null;
-        //onTrack = false;
         polyLineAll = '';
 
-        // should only be one leg for each pair of waypoints?
+        // should only be one leg for each pair of waypoints, but allow for more in future (e.g. adding dragging to edit routes)
         for (var i = 0; i < response.trip.legs.length; i++) {
             var leg = response.trip.legs[i];
             var legDist = 0;
-            var legPoints= [];
-            var index = 0;
-            for (var j = 0; j < leg.maneuvers.length; j++) {
-                var maneuver = leg.maneuvers[j];
-                //var instruction = maneuver.verbal_pre_transition_instruction;
-                var instruction = maneuver.verbal_transition_alert_instruction;
-                var shapeIndex = maneuver.begin_shape_index;
-                legDist += maneuver.length;
-                
-                while (index++ < shapeIndex)
-                {
-                    // no instructions at these points
-                    legPoints.push('');
-                }
-                legPoints.push(instruction);
-            }
-            // now get coordinates of all points
+
+            // get coordinates of all points
             var pline = leg.shape;
             polyLineAll = polyLineAll + pline;
-            //polyLineAll = pline;
             var locations = utils.polyLineDecode(pline, 6);
 
             var colour = 'red';
@@ -552,28 +536,47 @@ var myMap = (function ($) {
             }).addTo(map);
 
             routes.push(route);
-            distances.push(legDist);
-            for (var loc = 0; loc < locations.length; loc++) {
-                // save points passed through, and store any instruction for each point 
-                var p1 = locations[loc][0], p2 = locations[loc][1];
-                //var instr = (loc > 0) ? legPoints[loc - 1] : legPoints[loc];
-                var instr =  legPoints[loc];
-                routePoints.push([p1, p2, instr]);
-                //// for debug only
-                //var circle = L.circle([p1, p2], 10, {
-                //    color: 'red',
-                //    fillColor: 'red',
-                //    fillOpacity: 0.5
-                //}).addTo(map);
-                //circle.bindPopup(loc.toString());
+
+            // get the instructions
+            var index = 0;
+            var maneuver, nextManeuver, instruction;
+            var last_shape_index = null;
+            for (var j = 0; j < leg.maneuvers.length; j++) {
+                var maneuver = leg.maneuvers[j];
+                legDist += maneuver.length;
+
+                while (index < maneuver.begin_shape_index)
+                {
+                    routePoints.push([locations[index][0], locations[index][1], '']);
+                    index = index + 1;
+                }
+                routePoints.push([locations[index][0], locations[index][1], maneuver.verbal_pre_transition_instruction]);
+                index = index + 1;
+                // now go back and add an alert instruction at an appropriate point
+                var shapesLength = 0;
+                var backIndex = index;
+                while (shapesLength < 50 && backIndex > 0) {
+                    shapesLength += locations[--backIndex][2];
+                }
+                --backIndex;
+                if (backIndex >= last_shape_index) {
+                    var instruction = maneuver.verbal_transition_alert_instruction;
+                    if (instruction != undefined && instruction.lastIndexOf('Continue', 0) != 0) {
+                        if (routePoints[backIndex][2].length == 0) {
+                            routePoints[backIndex][2] = 'In ' + Math.round(shapesLength/10)*10 + ' metres' + ', ' + maneuver.verbal_transition_alert_instruction;
+                        }
+                    }
+                }
+                last_shape_index = maneuver.begin_shape_index;
             }
+            distances.push(legDist);
+
         }
         // get elevation data
         var data = {
             range: true,
             encoded_polyline: polyLineAll
         }
-        //tempData.push(data);
         MapData.jsonMapzen(true,data, getElevations);
 
     }

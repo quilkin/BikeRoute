@@ -2,6 +2,7 @@
     "use strict";
     var utils = {};
     var lastLine1, lastLine2, lastDem;
+    var lastLat, lastLng;
 
     utils.pointToLine = function(point0, line1, line2) {
         // find min distance from point0 to line defined by points line1 and line2
@@ -99,6 +100,7 @@
     }
 
     // Code from Mapzen site
+    // modified to output distance of each segment
     utils.polyLineDecode = function(str, precision) {
         var index = 0,
             lat = 0,
@@ -111,6 +113,7 @@
             longitude_change,
             factor = Math.pow(10, precision || 6);
 
+        lastLat = null, lastLng = null;
         // Coordinates have variable length when encoded, so just keep
         // track of whether we've hit the end of the string. In each
         // loop iteration, a single coordinate is decoded.
@@ -142,7 +145,15 @@
             lat += latitude_change;
             lng += longitude_change;
 
-            coordinates.push([lat / factor, lng / factor]);
+            var newLat = lat / factor;
+            var newLng = lng / factor;
+            var newDist = 0;
+            if (lastLat != null && lastLng != null) {
+                newDist = Math.round(utils.distanceBetweenCoordinates([lastLat, lastLng], [newLat, newLng]));
+            }
+            lastLat = newLat;
+            lastLng = newLng;
+            coordinates.push([newLat, newLng,newDist]);
         }
 
         return coordinates;
