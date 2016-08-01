@@ -4,15 +4,17 @@
 /// <reference path="utils.js" />
 
 
+// ToDo: center map only if moved more than 100 m?
+// ToDo: extra 'continue' instructions during long sections with no turns
+// ToDo: preload maps for route
+// ToDo: sort out proper joining of two legs
+
 var myMap = (function ($) {
     "use strict";
 
     aggressiveEnabled: false;
     // distance to check if on track or not (approx 100 m)
-    // approximate to metres.
-    // one degree = 100 km approx
-    // **ToDo** : this won't work at high latitudes!
-    var near = 0.001;
+    var near = 100;
     // distance to check if too far from track to bother reporting error (metres)
     var far = 1000;
     // message when off track
@@ -42,11 +44,13 @@ var myMap = (function ($) {
         lastInstructionCount = 0,
         watchID = null,
         currentLat, currentLong,
+        lastLat = 0, lastLong = 0,
         currentPosMarker = null,
        // followedPoints = [],
         polyLineAll = '',
         nearestPoint = null,
         lastNearestPoint = null,
+        wasOnTrack = false,
         //onTrack = false,
         maxGrad = 0,
         dialog, dialogContents;
@@ -118,13 +122,16 @@ var myMap = (function ($) {
             if (currentPosMarker != null)
                 map.removeLayer(currentPosMarker);
             currentPosMarker = L.marker([currentLat, currentLong], { icon: redIcon }).addTo(map);
-            if (nearestPoint > 2) {
-                // have left start, keep current location in centre of screen
+            if (utils.distanceBetweenCoordinates([currentLat, currentLong], [lastLat, lastLong]) > 100) {
+            //if (nearestPoint > 2) {
+                // moving, keep current location in centre of screen
                 var zoom = map.getZoom();
                 map.setView([currentLat, currentLong], zoom);
             }
             myMap.checkInstructions(currentLat, currentLong);
         }
+        lastLat = currentLat;
+        lastLong = currentLong;
     }
 
     function onGeoError(error) {
@@ -142,6 +149,7 @@ var myMap = (function ($) {
         if (mytext.length < 2)
             return;
         mytext = mytext.replace('Bike', 'Cycle');
+        mytext = mytext.replace('ramp', 'slip-road');
         
         
         if (lastInstruction != null) {
@@ -198,6 +206,9 @@ var myMap = (function ($) {
         routePoints = JSON.parse(localStorage.getItem("routepoints")) || [];
         wayPoints = JSON.parse(localStorage.getItem("waypoints")) || [];
         distances = JSON.parse(localStorage.getItem("distances")) || [];
+        bikeType = localStorage.getItem("type") || 'Road';
+        useHills = localStorage.getItem("hills") || 5;
+        useRoads = localStorage.getItem("roads") || 8;
     }
 
     if (L.Browser.mobile) {
@@ -451,8 +462,6 @@ var myMap = (function ($) {
             totalDesc += descents[leg];
         }
         totalDist = (Math.round(totalDist * 10) / 10);
-       // map.messagebox.show('Dist: ' + totalDist + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc );
-        //bootbox.alert('Dist: ' + totalDist + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc);
         lastMarker.bindPopup('Dist: ' + totalDist + ' km; Asc: ' + totalAsc + 'm; Desc: ' + totalDesc).openPopup(); 
     }
    
@@ -485,9 +494,11 @@ var myMap = (function ($) {
         {
             return;
         }
+        
         var points = wayPoints.length;
         var lastPoint = wayPoints[points - 1];
         var lastButOne = wayPoints[points - 2];
+        utils.setMetresPerLngDeg(lastPoint.lat);
         var costType = "bicycle";
         var options = {
             bicycle: {
@@ -541,6 +552,13 @@ var myMap = (function ($) {
             var index = 0;
             var maneuver, nextManeuver, instruction;
             var last_shape_index = null;
+            var previousPointCount = routePoints.length;
+            if (previousPointCount > 10) {
+            //change 'destination' to 'waypoint' for end of last section
+                for (var i = 1; i < 10; i++) {
+                    routePoints[previousPointCount - i][2] = routePoints[previousPointCount - i][2].replace('destination', 'waypoint');
+                }
+            }
             for (var j = 0; j < leg.maneuvers.length; j++) {
                 var maneuver = leg.maneuvers[j];
                 legDist += maneuver.length;
@@ -550,8 +568,18 @@ var myMap = (function ($) {
                     routePoints.push([locations[index][0], locations[index][1], '']);
                     index = index + 1;
                 }
-                routePoints.push([locations[index][0], locations[index][1], maneuver.verbal_pre_transition_instruction]);
-                index = index + 1;
+                if (routePoints.length == 0 || previousPointCount < routePoints.length) {
+                    // ignore first instruction it this is an added section
+                    var instr = maneuver.verbal_pre_transition_instruction;
+                    if (maneuver.verbal_post_transition_instruction != undefined) {
+                        if (instr.indexOf('Then') == -1) {
+                            instr = instr + " Then " + maneuver.verbal_post_transition_instruction;
+                        }
+                    }
+                    routePoints.push([locations[index][0], locations[index][1],instr]);
+                    index = index + 1;
+                }
+                
                 // now go back and add an alert instruction at an appropriate point
                 var shapesLength = 0;
                 var backIndex = index;
@@ -562,8 +590,9 @@ var myMap = (function ($) {
                 if (backIndex >= last_shape_index) {
                     var instruction = maneuver.verbal_transition_alert_instruction;
                     if (instruction != undefined && instruction.lastIndexOf('Continue', 0) != 0) {
-                        if (routePoints[backIndex][2].length == 0) {
-                            routePoints[backIndex][2] = 'In ' + Math.round(shapesLength/10)*10 + ' metres' + ', ' + maneuver.verbal_transition_alert_instruction;
+                        // don't need an alert for an existing 'continue'
+                        if (routePoints[backIndex + previousPointCount][2].length == 0) {
+                            routePoints[backIndex + previousPointCount][2] = 'In ' + Math.round(shapesLength / 10) * 10 + ' metres' + ', ' + maneuver.verbal_pre_transition_instruction;
                         }
                     }
                 }
@@ -622,6 +651,10 @@ var myMap = (function ($) {
         localStorage.setItem("routepoints", JSON.stringify(routePoints));
         localStorage.setItem("waypoints", JSON.stringify(wayPoints));
         localStorage.setItem("distances", JSON.stringify(distances));
+        localStorage.setItem("type", bikeType);
+        localStorage.setItem("hills", useHills);
+        localStorage.setItem("roads", useRoads);
+
     }
 
    
@@ -637,15 +670,15 @@ var myMap = (function ($) {
         if (nearestPoint === null) {
             // Nowhere near?. Check point against all points in the route
             for (var loc = 0; loc < routePoints.length; loc++) {
-                var point = routePoints[loc];
-                var dist = utils.distanceBetweenCoordinates(thisPoint, point);
-                if (Math.abs(point[0] - lat) < near) {
-                    if (Math.abs(point[1] - lon) < near) {
-                        nearestPoint = loc;
-                        //onTrack = true;
-                        break;
-                    }
+                var dist = utils.distanceBetweenCoordinates(thisPoint, routePoints[loc]);
+               // if (Math.abs(point[0] - lat) < near) {
+                // if (Math.abs(point[1] - lon) < near) {
+                if (dist < near) {
+                    nearestPoint = loc;
+                    //onTrack = true;
+                    break;
                 }
+
             }
         }
         else {
@@ -670,7 +703,6 @@ var myMap = (function ($) {
                 if (nearestPoint < routePoints.length)
                     ++nearestPoint;
                 // for debug
-                //speak(nearestPoint.toString(), routePoints[nearestPoint]);
                 onTrack = true;
             }
             if (previous < nearest && previous < near) {
@@ -694,7 +726,7 @@ var myMap = (function ($) {
             }
 
         }
-        else if (lastNearestPoint) {
+        else if (lastNearestPoint != null) {
             if (lastNearestPoint >= routePoints.length) {
                 lastNearestPoint = routePoints.length - 1;
             }
@@ -707,9 +739,9 @@ var myMap = (function ($) {
                 spoken = true;
             }
         }
-        //if (!spoken && nearestPoint != null)
-        //    speak(nearestPoint.toString(), routePoints[nearestPoint]);
-        return (nearestPoint != null);
+
+        wasOnTrack = (nearestPoint != null);
+        return wasOnTrack;
     }
     return myMap
 })(jQuery )
