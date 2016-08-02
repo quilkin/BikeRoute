@@ -4,28 +4,31 @@
 /// <reference path="utils.js" />
 
 
-// ToDo: center map only if moved more than 100 m?
 // ToDo: extra 'continue' instructions during long sections with no turns
 // ToDo: preload maps for route
-// ToDo: sort out proper joining of two legs
+
 
 var myMap = (function ($) {
     "use strict";
 
-    aggressiveEnabled: false;
-    // distance to check if on track or not (approx 100 m)
-    var near = 100;
-    // distance to check if too far from track to bother reporting error (metres)
-    var far = 1000;
-    // message when off track
-    var offTrack1 = "Attention! You are "
+    //aggressiveEnabled: false;
+
+// constants
+    
+    var near = 100;                 // distance to check if on track or not (metres)
+    var far = 1000;                 // distance to check if too far from track to bother reporting error (metres)
+    
+    var offTrack1 = "Attention! You are "  // message when off track
     var offTrack2 = " metres off course. Correct course is to the "
+    var minAlertDistance = 50,      // smallest distance before a junction to give an alert
+        maxAlertDistance = 100,     // max distance ditto
+        continueDistance = 1000;    // how often to give reassurance along sections with no defined junctions
 
     var myMap = {},
         map,
         location = null,
         path,
-        aggressiveEnabled,
+        //aggressiveEnabled,
         //locations = [],
         iconCentre1,
         messageBox,
@@ -53,6 +56,7 @@ var myMap = (function ($) {
         wasOnTrack = false,
         //onTrack = false,
         maxGrad = 0,
+
         dialog, dialogContents;
 
  
@@ -290,13 +294,6 @@ var myMap = (function ($) {
     myMap.getData();
 
     function loadOldRoutes() {
-        //var locations = [];
-        //for (var r = 0; r < routePoints.length; r++) {
-        //    var lat = routePoints[r][0];
-        //    var lon = routePoints[r][1];
-        //    locations.push([lat, lon]);
-        //}
-
         var route = new L.Polyline(routePoints, {
             color: 'red',
             opacity: 1,
@@ -304,8 +301,6 @@ var myMap = (function ($) {
             clickable: false
         }).addTo(map);
         routes.push(route);
-
-
         
         for (var m = 0; m < wayPoints.length; m++) {
             if (m == 0) {
@@ -486,8 +481,6 @@ var myMap = (function ($) {
         })
     }
     
-    
-
     function createRoute()
     {
         if (wayPoints.length < 2)
@@ -522,8 +515,6 @@ var myMap = (function ($) {
     }
 
     function getRoute(response) {
-       
-
         nearestPoint = null;
         polyLineAll = '';
 
@@ -553,6 +544,7 @@ var myMap = (function ($) {
             var maneuver, nextManeuver, instruction;
             var last_shape_index = null;
             var previousPointCount = routePoints.length;
+            var mvrLength, previousManeuverLength = 1;
             if (previousPointCount > 10) {
             //change 'destination' to 'waypoint' for end of last section
                 for (var i = 1; i < 10; i++) {
@@ -569,7 +561,7 @@ var myMap = (function ($) {
                     index = index + 1;
                 }
                 if (routePoints.length == 0 || previousPointCount < routePoints.length) {
-                    // ignore first instruction it this is an added section
+                    // ignore first instruction if this is an added section
                     var instr = maneuver.verbal_pre_transition_instruction;
                     if (maneuver.verbal_post_transition_instruction != undefined) {
                         if (instr.indexOf('Then') == -1) {
@@ -579,28 +571,77 @@ var myMap = (function ($) {
                     routePoints.push([locations[index][0], locations[index][1],instr]);
                     index = index + 1;
                 }
-                
+
+
+
                 // now go back and add an alert instruction at an appropriate point
                 var shapesLength = 0;
                 var backIndex = index;
-                while (shapesLength < 50 && backIndex > 0) {
+                while (shapesLength < minAlertDistance && backIndex > 0) {
                     shapesLength += locations[--backIndex][2];
                 }
                 --backIndex;
                 if (backIndex >= last_shape_index) {
-                    var instruction = maneuver.verbal_transition_alert_instruction;
+                    var instruction = maneuver.verbal_pre_transition_instruction;
                     if (instruction != undefined && instruction.lastIndexOf('Continue', 0) != 0) {
+
                         // don't need an alert for an existing 'continue'
                         if (routePoints[backIndex + previousPointCount][2].length == 0) {
-                            routePoints[backIndex + previousPointCount][2] = 'In ' + Math.round(shapesLength / 10) * 10 + ' metres' + ', ' + maneuver.verbal_pre_transition_instruction;
+                            if (shapesLength > maxAlertDistance) {
+                                // this is too far ahead for cycling. Need to create a new node
+                                var ratio = (minAlertDistance + 10) / shapesLength;
+                                var prevPoint = routePoints[backIndex + previousPointCount - 1];
+                                var thisPoint = routePoints[backIndex + previousPointCount];
+                                var offsetLng = thisPoint[1] - prevPoint[1];
+                                var offsetLat = thisPoint[0] - prevPoint[0];
+                                var newPoint = [prevPoint[0] + ratio * offsetLat, prevPoint[1] + ratio * offsetLng];
+                                var instr = 'In ' + (minAlertDistance + 10) + ' metres' + ', ' + instruction;
+                                routePoints.splice(backIndex + previousPointCount, 0, [newPoint[0], newPoint[1], instr]);
+                                index = index + 1;
+                            }
+                            else {
+                                routePoints[backIndex + previousPointCount][2] = 'In ' + Math.round(shapesLength / 10) * 10 + ' metres' + ', ' + instruction;
+                            }
                         }
                     }
                 }
+                // go back further to add extra 'continue' prompts along long sections without turns
+
+                mvrLength = previousManeuverLength;
+
+                var continuesToAdd = Math.floor(mvrLength / continueDistance);
+                var continuesAdded = 0;
+
+                while (continuesAdded <  continuesToAdd /*&& backIndex > last_shape_index*/) {
+                    while (shapesLength < continueDistance*continuesAdded && backIndex > 0) {
+                        shapesLength += locations[--backIndex][2];
+                    }
+                    --backIndex;
+                    if (backIndex >= last_shape_index) {
+                        //var instr = 'Continue for ' + Math.round((mvrLength - shapesLength) / 10) * 10 + 'metres';
+                        if (routePoints[backIndex + previousPointCount][2].length == 0) {
+                            routePoints[backIndex + previousPointCount][2] = 'Continue for ' + Math.round(shapesLength / 100) * 100 + ' metres';
+                        }
+                    }
+                    continuesAdded = continuesAdded + 1;
+                }
+
+                previousManeuverLength = maneuver.length * 1000;
+
                 last_shape_index = maneuver.begin_shape_index;
             }
             distances.push(legDist);
 
         }
+        //for (var i = 0; i < routePoints.length; i++) {
+        //    var circle = L.circle([routePoints[i][0],routePoints[i][1]],  15, {
+        //        color: 'black',
+        //        fillColor: 'blue',
+        //        fillOpacity: 0.5
+        //    }).addTo(map);
+        //    circle.bindPopup(i.toString());
+        //}
+
         // get elevation data
         var data = {
             range: true,
